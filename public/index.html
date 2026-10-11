@@ -33,7 +33,7 @@ body{margin:0;padding:32px;max-width:980px;margin-inline:auto}h1{letter-spacing:
 <section class="card" style="margin-top:14px" id="creatorFormCard">
 <h2>Criar token SPL · Devnet</h2>
 <p class="deployment-version" style="font-size:.8rem;color:#14f195">Painel direto · versão sem login no navegador</p>
-<p>Criação direta na Devnet: as credenciais são lidas pelo servidor no VPS e não são solicitadas nesta página. Informe nome, símbolo, descrição e URL pública HTTPS da imagem. Cada criação envia uma transação irreversível e consome SOL de teste. Por segurança, há limite de 3 criações por hora por IP.</p>
+<p>Criação automatizada na Devnet: as credenciais e a publicação são tratadas pelo servidor no VPS. Informe os dados e selecione o arquivo da imagem; o sistema enviará a imagem e os metadados ao Pinata automaticamente. Cada criação envia uma transação irreversível e consome SOL de teste. Limite de 3 criações por hora por IP.</p>
 <form id="tokenForm">
 <label for="tokenName">Nome do token (até 32 caracteres)</label>
 <input id="tokenName" maxlength="32" required placeholder="Ex.: Meu Token" style="display:block;width:100%;box-sizing:border-box;margin:8px 0 14px;padding:12px;border-radius:8px;border:1px solid #405071;background:#0b1020;color:#eef2ff">
@@ -41,8 +41,8 @@ body{margin:0;padding:32px;max-width:980px;margin-inline:auto}h1{letter-spacing:
 <input id="tokenSymbol" maxlength="10" required placeholder="Ex.: MTK" style="display:block;width:100%;box-sizing:border-box;margin:8px 0 14px;padding:12px;border-radius:8px;border:1px solid #405071;background:#0b1020;color:#eef2ff">
 <label for="tokenDescription">Descrição</label>
 <textarea id="tokenDescription" maxlength="500" required placeholder="Descreva o projeto do token" rows="3" style="display:block;width:100%;box-sizing:border-box;margin:8px 0 14px;padding:12px;border-radius:8px;border:1px solid #405071;background:#0b1020;color:#eef2ff"></textarea>
-<label for="tokenImage">URL pública da imagem (HTTPS)</label>
-<input id="tokenImage" type="url" required placeholder="https://seusite.com/imagem.png" style="display:block;width:100%;box-sizing:border-box;margin:8px 0 14px;padding:12px;border-radius:8px;border:1px solid #405071;background:#0b1020;color:#eef2ff">
+<label for="tokenImageFile">Imagem do token (PNG, JPG, WEBP ou GIF; máximo 2 MB)</label>
+<input id="tokenImageFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" required style="display:block;width:100%;box-sizing:border-box;margin:8px 0 14px;padding:12px;border-radius:8px;border:1px solid #405071;background:#0b1020;color:#eef2ff">
 <div class="grid">
 <div><label for="tokenSupply">Oferta inicial</label><input id="tokenSupply" value="1000" inputmode="decimal" required style="display:block;width:100%;box-sizing:border-box;margin:8px 0 14px;padding:12px;border-radius:8px;border:1px solid #405071;background:#0b1020;color:#eef2ff"></div>
 <div><label for="tokenDecimals">Casas decimais</label><select id="tokenDecimals" style="display:block;width:100%;box-sizing:border-box;margin:8px 0 14px;padding:12px;border-radius:8px;border:1px solid #405071;background:#0b1020;color:#eef2ff"><option value="6" selected>6</option><option value="0">0</option><option value="2">2</option><option value="9">9</option></select></div>
@@ -64,7 +64,7 @@ tokenForm.addEventListener('submit', async (event) => {
   const name = document.getElementById('tokenName').value.trim();
   const symbol = document.getElementById('tokenSymbol').value.trim();
   const description = document.getElementById('tokenDescription').value.trim();
-  const imageUrl = document.getElementById('tokenImage').value.trim();
+  const imageFile = document.getElementById('tokenImageFile').files[0];
   const initialSupply = document.getElementById('tokenSupply').value.trim();
   const decimals = Number(document.getElementById('tokenDecimals').value);
   result.hidden = true;
@@ -78,11 +78,12 @@ tokenForm.addEventListener('submit', async (event) => {
   button.textContent = 'Publicando metadados e enviando transação…';
   message.textContent = 'Processando. Não feche a página nem repita a solicitação.';
   try {
+    const imageDataUrl = await new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = () => reject(new Error('Não foi possível ler a imagem.')); reader.readAsDataURL(imageFile); });
     const response = await fetch('/api/devnet/tokens', {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ initialSupply, decimals, name, symbol, description, imageUrl })
+      body: JSON.stringify({ initialSupply, decimals, name, symbol, description, imageDataUrl, imageFileName: imageFile.name })
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Falha ao criar token.');
