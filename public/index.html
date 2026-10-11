@@ -30,6 +30,28 @@ body{margin:0;padding:32px;max-width:980px;margin-inline:auto}h1{letter-spacing:
 <p>Esta verificação consulta saúde e slot da Devnet. Não cria tokens, não assina e não envia transações.</p>
 </section>
 
+<section class="card" style="margin-top:14px" id="autonomousBot">
+<h2>Robô autônomo · Simulação</h2>
+<p>Gera nome, símbolo, descrição e arte automaticamente e registra ciclos. Nesta etapa é simulação: não cria tokens on-chain, não negocia e não gera lucro real.</p>
+<div class="grid">
+<div><p>Estado</p><div class="value status" id="botState">PAUSADO</div></div>
+<div><p>Ciclo</p><div class="value" id="botCycle">0</div></div>
+<div><p>Capital de referência</p><div class="value" id="botCapital">R$ 100,00</div></div>
+<div><p>Meta simulada</p><div class="value" id="botTarget">R$ 195,00</div></div>
+</div>
+<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">
+<button id="botStart" type="button" style="padding:12px 18px;border:0;border-radius:9px;background:#14f195;color:#052014;font-weight:700;cursor:pointer">LIGAR ROBÔ</button>
+<button id="botStop" type="button" style="padding:12px 18px;border:1px solid #405071;border-radius:9px;background:#0b1020;color:#eef2ff;cursor:pointer">DESLIGAR</button>
+</div>
+<div id="botActiveToken" style="margin-top:14px"></div>
+<div style="margin-top:14px;padding:12px;border:1px solid #283653;border-radius:10px">
+<strong>Recebimento simulado</strong><p>Teste a regra de ciclo sem dinheiro real. Um novo ciclo só começa quando a meta simulada for atingida.</p>
+<label for="simProceeds">Valor recebido (R$)</label><input id="simProceeds" type="number" min="0" step="0.01" value="195" style="display:block;width:100%;box-sizing:border-box;margin:8px 0 12px;padding:12px;border-radius:8px;border:1px solid #405071;background:#0b1020;color:#eef2ff">
+<button id="simulateRecovery" type="button" style="padding:10px 14px;border:1px solid #405071;border-radius:9px;background:#0b1020;color:#eef2ff;cursor:pointer">Registrar simulação</button><p id="botMessage" role="status" aria-live="polite"></p>
+</div>
+<h3>Histórico de tokens e ciclos</h3><div id="botTokens">Carregando…</div>
+<h3>Eventos recentes</h3><div id="botEvents"></div>
+</section>
 <section class="card" style="margin-top:14px" id="creatorFormCard">
 <h2>Criar token SPL · Devnet</h2>
 <p class="deployment-version" style="font-size:.8rem;color:#14f195">Painel direto · versão sem login no navegador</p>
@@ -54,6 +76,33 @@ body{margin:0;padding:32px;max-width:980px;margin-inline:auto}h1{letter-spacing:
 </section>
 <section class="card" style="margin-top:14px"><h2>Próximas etapas</h2><p>Testes unitários → verificação Devnet → testes de transação em rede de testes → criação de tokens → páginas gratuitas → monitoramento diário.</p></section>
 <script>
+
+const money = value => new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(Number(value||0));
+async function refreshBot(){
+ const response=await fetch('/api/bot',{cache:'no-store'}); const bot=await response.json();
+ document.getElementById('botState').textContent=bot.running?'LIGADO · SIMULAÇÃO':'PAUSADO';
+ document.getElementById('botCycle').textContent=String(bot.cycle);
+ document.getElementById('botCapital').textContent=money(bot.initialCapitalBrl);
+ document.getElementById('botTarget').textContent=money(bot.targetRecoveryBrl);
+ const active=document.getElementById('botActiveToken'); active.textContent='';
+ if(bot.activeToken){
+  const card=document.createElement('div');card.style.cssText='display:flex;gap:14px;align-items:center;padding:12px;border:1px solid #283653;border-radius:10px';
+  const img=document.createElement('img');img.alt='Arte de '+bot.activeToken.name;img.width=88;img.height=88;img.style.cssText='border-radius:12px;object-fit:cover;background:#0b1020';img.src='data:image/svg+xml;base64,'+btoa(unescape(encodeURIComponent(bot.activeToken.imageSvg||'')));
+  const details=document.createElement('div');const title=document.createElement('strong');title.textContent=bot.activeToken.name+' ('+bot.activeToken.symbol+')';
+  const desc=document.createElement('p');desc.textContent=bot.activeToken.description;
+  const value=document.createElement('p');value.textContent='Valor simulado: '+money(bot.activeToken.simulatedValueBrl)+' · Recebido: '+money(bot.activeToken.simulatedProceedsBrl);
+  details.append(title,desc,value);card.append(img,details);active.append(card);
+ }else active.textContent='Nenhum ciclo ativo.';
+ const tokens=document.getElementById('botTokens');tokens.textContent='';
+ if(!bot.tokens.length)tokens.textContent='Nenhum ciclo registrado.';
+ for(const token of bot.tokens){const row=document.createElement('div');row.style.cssText='padding:10px 0;border-bottom:1px solid #283653';const title=document.createElement('strong');title.textContent='#'+token.cycle+' · '+token.name+' ('+token.symbol+')';const info=document.createElement('p');info.textContent=token.status+' · '+new Date(token.createdAt).toLocaleString('pt-BR')+' · recebido simulado: '+money(token.simulatedProceedsBrl);row.append(title,info);tokens.append(row);}
+ const events=document.getElementById('botEvents');events.textContent='';for(const event of [...bot.events].reverse()){const p=document.createElement('p');p.textContent=new Date(event.at).toLocaleString('pt-BR')+' — '+event.message;events.append(p);}
+}
+async function botAction(route,body){const msg=document.getElementById('botMessage');msg.textContent='Processando…';try{const response=await fetch(route,{method:'POST',headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});const data=await response.json();if(!response.ok)throw new Error(data.error||'Falha');msg.textContent='Atualizado.';await refreshBot();}catch(error){msg.textContent='Erro: '+error.message;}}
+document.getElementById('botStart').addEventListener('click',()=>botAction('/api/bot/start'));
+document.getElementById('botStop').addEventListener('click',()=>botAction('/api/bot/stop'));
+document.getElementById('simulateRecovery').addEventListener('click',()=>{const value=Number(document.getElementById('simProceeds').value);if(!Number.isFinite(value)||value<0){document.getElementById('botMessage').textContent='Informe um valor válido.';return;}botAction('/api/bot/simulate-recovery',{proceedsBrl:value});});
+refreshBot().catch(error=>document.getElementById('botMessage').textContent='Falha ao carregar o robô: '+error.message);
 
 const tokenForm = document.getElementById('tokenForm');
 tokenForm.addEventListener('submit', async (event) => {
