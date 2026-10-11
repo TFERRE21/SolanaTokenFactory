@@ -1,7 +1,6 @@
 import {
   Connection,
   Keypair,
-  PublicKey,
   SystemProgram,
   Transaction,
   sendAndConfirmTransaction
@@ -32,9 +31,6 @@ export function getDevnetRpcUrl() {
   return url.toString();
 }
 
-/**
- * Read-only Devnet connectivity check. This function cannot sign or submit transactions.
- */
 export async function checkSolanaDevnet({ fetchImpl = fetch, timeoutMs = 8000 } = {}) {
   const endpoint = getDevnetRpcUrl();
   const controller = new AbortController();
@@ -98,9 +94,9 @@ function loadDevnetWallet() {
   }
 }
 
-function parseTokenAmount(value, decimals) {
+export function parseTokenAmount(value, decimals) {
   if (typeof value !== "string" || !/^(0|[1-9]\d*)(\.\d+)?$/.test(value)) {
-    throw new TypeError("initialSupply must be a positive decimal string, such as \"1000\"");
+    throw new TypeError('initialSupply must be a positive decimal string, such as "1000"');
   }
   const [whole, fraction = ""] = value.split(".");
   if (fraction.length > decimals) {
@@ -115,8 +111,8 @@ function parseTokenAmount(value, decimals) {
 }
 
 /**
- * Creates an SPL mint and mints its initial supply to the configured Devnet wallet.
- * Explicitly restricted to Devnet. This submits a real transaction on Devnet, never Mainnet.
+ * Creates an SPL mint and initial supply only on Solana Devnet.
+ * Requires a dedicated Devnet wallet funded with test SOL.
  */
 export async function createSplTokenOnDevnet({ initialSupply, decimals = 6 }) {
   const endpoint = getDevnetRpcUrl();
@@ -175,7 +171,7 @@ export async function createSplTokenOnDevnet({ initialSupply, decimals = 6 }) {
     tokenAccount: associatedTokenAccount.toBase58(),
     ownerAddress: payer.publicKey.toBase58(),
     decimals,
-    initialSupply: initialSupply,
+    initialSupply,
     signature,
     explorerUrl: `https://explorer.solana.com/tx/${signature}?cluster=devnet`,
     confirmed: true
