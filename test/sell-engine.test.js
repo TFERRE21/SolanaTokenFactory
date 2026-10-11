@@ -5,9 +5,9 @@ import { calculateSellPlan, classifyExecution } from "../src/sell-engine.js";
 test("R$200 position targets estimated R$195 proceeds and retains only the remainder", () => {
   const plan = calculateSellPlan({ positionValue: 200, targetProceeds: 195, slippageBps: 0, maxSlippageBps: 100 });
   assert.equal(plan.status, "target_estimable");
-  assert.equal(plan.sellFraction, 0.975);
-  assert.equal(plan.retainedFraction, 0.025);
-  assert.equal(plan.estimatedProceeds, 195);
+  assert.ok(Math.abs(plan.sellFraction - 0.975) < 1e-10);
+  assert.ok(Math.abs(plan.retainedFraction - 0.025) < 1e-10);
+  assert.ok(Math.abs(plan.estimatedProceeds - 195) < 1e-10);
   assert.equal(plan.submitsTransaction, false);
 });
 
