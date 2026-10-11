@@ -1,21 +1,17 @@
 import {
   Connection,
   Keypair,
+  PublicKey,
   SystemProgram,
   Transaction,
+  TransactionInstruction,
   sendAndConfirmTransaction
 } from "@solana/web3.js";
-import {
-  ASSOCIATED_TOKEN_PROGRAM_ID,
-  MINT_SIZE,
-  TOKEN_PROGRAM_ID,
-  createAssociatedTokenAccountInstruction,
-  createInitializeMintInstruction,
-  createMintToInstruction,
-  getAssociatedTokenAddressSync
-} from "@solana/spl-token";
 
 const DEFAULT_DEVNET_RPC = "https://api.devnet.solana.com";
+const TOKEN_PROGRAM_ID = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsKY7dK");
+const MINT_SIZE = 82;
 
 export function getDevnetRpcUrl() {
   const raw = process.env.SOLANA_RPC_URL || DEFAULT_DEVNET_RPC;
@@ -95,7 +91,7 @@ function loadDevnetWallet() {
 }
 
 export function parseTokenAmount(value, decimals) {
-  if (typeof value !== "string" || !/^(0|[1-9]\d*)(\.\d+)?$/.test(value)) {
+  if (typeof value !== "string" || !/^(0|[1-9]\\d*)(\\.\\d+)?$/.test(value)) {
     throw new TypeError('initialSupply must be a positive decimal string, such as "1000"');
   }
   const [whole, fraction = ""] = value.split(".");
@@ -110,9 +106,68 @@ export function parseTokenAmount(value, decimals) {
   return units;
 }
 
+export function deriveAssociatedTokenAddress(owner, mint) {
+  const [address] = PublicKey.findProgramAddressSync(
+    [owner.toBuffer(), TOKEN_PROGRAM_ID.toBuffer(), mint.toBuffer()],
+    ASSOCIATED_TOKEN_PROGRAM_ID
+  );
+  return address;
+}
+
+export function buildInitializeMintInstruction(mint, decimals, authority) {
+  if (!Number.isInteger(decimals) || decimals < 0 || decimals > 9) {
+    throw new RangeError("decimals must be an integer from 0 to 9");
+  }
+  const data = Buffer.alloc(35);
+  data[0] = 0; // InitializeMint
+  data[1] = decimals;
+  authority.toBuffer().copy(data, 2);
+  data[34] = 0; // no freeze authority
+  return new TransactionInstruction({
+    programId: TOKEN_PROGRAM_ID,
+    keys: [{ pubkey: mint, isSigner: false, isWritable: true }],
+    data
+  });
+}
+
+export function buildCreateAssociatedTokenAccountInstruction(payer, address, owner, mint) {
+  return new TransactionInstruction({
+    programId: ASSOCIATED_TOKEN_PROGRAM_ID,
+    keys: [
+      { pubkey: payer, isSigner: true, isWritable: true },
+      { pubkey: address, isSigner: false, isWritable: true },
+      { pubkey: owner, isSigner: false, isWritable: false },
+      { pubkey: mint, isSigner: false, isWritable: false },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false }
+    ],
+    data: Buffer.alloc(0)
+  });
+}
+
+export function buildMintToInstruction(mint, destination, authority, amount) {
+  if (typeof amount !== "bigint" || amount <= 0n || amount > 0xffffffffffffffffn) {
+    throw new RangeError("amount must be a positive unsigned 64-bit integer");
+  }
+  const data = Buffer.alloc(9);
+  data[0] = 7; // MintTo
+  data.writeBigUInt64LE(amount, 1);
+  return new TransactionInstruction({
+    programId: TOKEN_PROGRAM_ID,
+    keys: [
+      { pubkey: mint, isSigner: false, isWritable: true },
+      { pubkey: destination, isSigner: false, isWritable: true },
+      { pubkey: authority, isSigner: true, isWritable: false }
+    ],
+    data
+  });
+}
+
 /**
  * Creates an SPL mint and initial supply only on Solana Devnet.
  * Requires a dedicated Devnet wallet funded with test SOL.
+ * SPL instruction layouts are defined here to avoid the vulnerable
+ * bigint-buffer dependency pulled in by @solana/spl-token.
  */
 export async function createSplTokenOnDevnet({ initialSupply, decimals = 6 }) {
   const endpoint = getDevnetRpcUrl();
@@ -123,13 +178,7 @@ export async function createSplTokenOnDevnet({ initialSupply, decimals = 6 }) {
   const payer = loadDevnetWallet();
   const connection = new Connection(endpoint, { commitment: "confirmed" });
   const mint = Keypair.generate();
-  const associatedTokenAccount = getAssociatedTokenAddressSync(
-    mint.publicKey,
-    payer.publicKey,
-    false,
-    TOKEN_PROGRAM_ID,
-    ASSOCIATED_TOKEN_PROGRAM_ID
-  );
+  const associatedTokenAccount = deriveAssociatedTokenAddress(payer.publicKey, mint.publicKey);
   const lamports = await connection.getMinimumBalanceForRentExemption(MINT_SIZE);
   const transaction = new Transaction().add(
     SystemProgram.createAccount({
@@ -139,23 +188,14 @@ export async function createSplTokenOnDevnet({ initialSupply, decimals = 6 }) {
       lamports,
       programId: TOKEN_PROGRAM_ID
     }),
-    createInitializeMintInstruction(mint.publicKey, decimals, payer.publicKey, null, TOKEN_PROGRAM_ID),
-    createAssociatedTokenAccountInstruction(
+    buildInitializeMintInstruction(mint.publicKey, decimals, payer.publicKey),
+    buildCreateAssociatedTokenAccountInstruction(
       payer.publicKey,
       associatedTokenAccount,
       payer.publicKey,
-      mint.publicKey,
-      TOKEN_PROGRAM_ID,
-      ASSOCIATED_TOKEN_PROGRAM_ID
+      mint.publicKey
     ),
-    createMintToInstruction(
-      mint.publicKey,
-      associatedTokenAccount,
-      payer.publicKey,
-      amount,
-      [],
-      TOKEN_PROGRAM_ID
-    )
+    buildMintToInstruction(mint.publicKey, associatedTokenAccount, payer.publicKey, amount)
   );
 
   const signature = await sendAndConfirmTransaction(connection, transaction, [payer, mint], {
@@ -163,7 +203,9 @@ export async function createSplTokenOnDevnet({ initialSupply, decimals = 6 }) {
     preflightCommitment: "confirmed"
   });
   const confirmed = await connection.getSignatureStatuses([signature], { searchTransactionHistory: true });
-  if (confirmed.value[0]?.err) throw new Error("Devnet transaction failed confirmation");
+  if (!confirmed.value[0] || confirmed.value[0].err) {
+    throw new Error("Devnet transaction failed confirmation");
+  }
 
   return {
     cluster: "devnet",
