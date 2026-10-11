@@ -49,6 +49,7 @@ function blankState() {
     targetRecoveryBrl: TARGET_RECOVERY_BRL,
     cycle: 0,
     activeToken: null,
+    awaitingConfirmedProceeds: false,
     tokens: [],
     events: [],
     updatedAt: new Date().toISOString()
@@ -118,6 +119,7 @@ function publicState(state) {
     targetRecoveryBrl: state.targetRecoveryBrl,
     cycle: state.cycle,
     activeToken: state.activeToken,
+    awaitingConfirmedProceeds: Boolean(state.awaitingConfirmedProceeds),
     tokens: state.tokens.map(({ imageDataUrl, ...token }) => token),
     events: state.events.slice(-30),
     updatedAt: state.updatedAt,
@@ -154,6 +156,7 @@ async function createTokenOnDevnet(token) {
 export async function startBot() {
   const state = await loadState();
   if (state.running) return publicState(state);
+  if (state.awaitingConfirmedProceeds) throw new Error("Ciclo bloqueado: meta simulada atingida. O próximo token só poderá ser criado após integrar e confirmar uma venda real; Devnet não gera recebimento em reais.");
   if (!state.activeToken) {
     const nextCycle = state.cycle + 1;
     const token = generatedToken(nextCycle);
@@ -192,6 +195,7 @@ export async function simulateRecovery(proceedsBrl) {
     state.events.push({ at: new Date().toISOString(), type: "target_simulated", message: "Meta simulada atingida. Nenhum próximo token foi criado: a confirmação de venda e recebimento real ainda não está integrada." });
     // Simulation must never trigger another on-chain token creation.
     state.activeToken = null;
+    state.awaitingConfirmedProceeds = true;
     state.running = false;
   }
   await saveState(state);
