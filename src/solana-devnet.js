@@ -260,7 +260,7 @@ export async function createSplTokenOnDevnet({ initialSupply, decimals = 6, name
       throw new TypeError(`${label} is required and must be at most ${max} characters`);
     }
   }
-  if (typeof imageUrl !== "string" || !imageUrl.trim()) throw new TypeError("imageUrl is required (public HTTPS image URL)");
+  if ((!imageDataUrl || typeof imageDataUrl !== "string") && (typeof imageUrl !== "string" || !imageUrl.trim())) throw new TypeError("Select an image file or provide a public HTTPS image URL.");
   const pinned = await pinTokenMetadata({
     name: name.trim(), symbol: symbol.trim(), description: description.trim(),
     imageUrl: imageUrl?.trim(), imageDataUrl, imageFileName
