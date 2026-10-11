@@ -280,6 +280,14 @@ export async function createSplTokenOnDevnet({ initialSupply, decimals = 6, name
       programId: TOKEN_PROGRAM_ID
     }),
     buildInitializeMintInstruction(mint.publicKey, decimals, payer.publicKey),
+    buildCreateMetadataInstruction({
+      mint: mint.publicKey,
+      authority: payer.publicKey,
+      payer: payer.publicKey,
+      uri: metadataUri,
+      name: name.trim(),
+      symbol: symbol.trim()
+    }),
     buildCreateAssociatedTokenAccountInstruction(
       payer.publicKey,
       associatedTokenAccount,
@@ -305,8 +313,12 @@ export async function createSplTokenOnDevnet({ initialSupply, decimals = 6, name
     ownerAddress: payer.publicKey.toBase58(),
     decimals,
     initialSupply,
+    description: description.trim(),
+    imageUri: pinned.imageUri,
+    metadataUri,
     signature,
     explorerUrl: `https://explorer.solana.com/tx/${signature}?cluster=devnet`,
+    metadataUrl: `https://explorer.solana.com/address/${mint.publicKey.toBase58()}?cluster=devnet`,
     confirmed: true
   };
 }
