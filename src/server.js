@@ -6,6 +6,7 @@ import path from "node:path";
 import { config } from "./config.js";
 import { calculateSellPlan } from "./sell-engine.js";
 import { checkSolanaDevnet, createSplTokenOnDevnet } from "./solana-devnet.js";
+import { getBotState, startBot, stopBot, simulateRecovery } from "./bot-engine.js";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const json = (res, status, payload) => {
@@ -106,6 +107,39 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === "GET" && req.url === "/api/admin/session") {
     json(res, 200, { authenticated: validAdminSession(req) });
+    return;
+  }
+
+  if (req.method === "GET" && req.url === "/api/bot") {
+    json(res, 200, await getBotState());
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/api/bot/start") {
+    try {
+      json(res, 200, await startBot());
+    } catch (error) {
+      json(res, 400, { error: error.message || "Não foi possível ligar o robô." });
+    }
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/api/bot/stop") {
+    try {
+      json(res, 200, await stopBot());
+    } catch (error) {
+      json(res, 400, { error: error.message || "Não foi possível pausar o robô." });
+    }
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/api/bot/simulate-recovery") {
+    try {
+      const body = await readJsonBody(req);
+      json(res, 200, await simulateRecovery(Number(body.proceedsBrl)));
+    } catch (error) {
+      json(res, 400, { error: error.message || "Não foi possível registrar a simulação." });
+    }
     return;
   }
 
