@@ -31,11 +31,28 @@ body{margin:0;padding:32px;max-width:980px;margin-inline:auto}h1{letter-spacing:
 </section>
 
 <section class="card" style="margin-top:14px" id="creator">
+<h2>Área administrativa</h2>
+<p>Entre uma vez com o ADMIN_API_TOKEN configurado no iContainer. O servidor valida a variável e mantém uma sessão segura por até 8 horas; o token não fica no código nem é solicitado a cada criação.</p>
+<form id="loginForm">
+<label for="adminToken">Token administrativo</label>
+<input id="adminToken" type="password" autocomplete="current-password" required placeholder="ADMIN_API_TOKEN do iContainer" style="display:block;width:100%;box-sizing:border-box;margin:8px 0 14px;padding:12px;border-radius:8px;border:1px solid #405071;background:#0b1020;color:#eef2ff">
+<button id="loginButton" type="submit" style="padding:10px 16px;border:0;border-radius:9px;background:#14f195;color:#052014;font-weight:700;cursor:pointer">Entrar</button>
+<button id="logoutButton" type="button" hidden style="padding:10px 16px;border:1px solid #405071;border-radius:9px;background:#0b1020;color:#eef2ff;cursor:pointer">Sair</button>
+<p id="loginMessage" role="status" aria-live="polite"></p>
+</form>
+</section>
+<section class="card" style="margin-top:14px" id="creatorFormCard" hidden>
 <h2>Criar token SPL · Devnet</h2>
-<p>Crie tokens de teste pelo painel, sem comandos no terminal. A operação envia uma transação à Solana Devnet e consome SOL de teste. Nunca use a chave privada da carteira neste formulário.</p>
+<p>Informe os dados do token. A imagem deve estar disponível por uma URL pública HTTPS. O servidor publica o JSON dos metadados no Pinata e grava nome e símbolo on-chain. Cada criação envia uma transação irreversível à Devnet e consome SOL de teste.</p>
 <form id="tokenForm">
-<label for="adminToken">Token administrativo (ADMIN_API_TOKEN)</label>
-<input id="adminToken" type="password" autocomplete="current-password" required placeholder="Cole o token administrativo" style="display:block;width:100%;box-sizing:border-box;margin:8px 0 14px;padding:12px;border-radius:8px;border:1px solid #405071;background:#0b1020;color:#eef2ff">
+<label for="tokenName">Nome do token (até 32 caracteres)</label>
+<input id="tokenName" maxlength="32" required placeholder="Ex.: Meu Token" style="display:block;width:100%;box-sizing:border-box;margin:8px 0 14px;padding:12px;border-radius:8px;border:1px solid #405071;background:#0b1020;color:#eef2ff">
+<label for="tokenSymbol">Símbolo (até 10 caracteres)</label>
+<input id="tokenSymbol" maxlength="10" required placeholder="Ex.: MTK" style="display:block;width:100%;box-sizing:border-box;margin:8px 0 14px;padding:12px;border-radius:8px;border:1px solid #405071;background:#0b1020;color:#eef2ff">
+<label for="tokenDescription">Descrição</label>
+<textarea id="tokenDescription" maxlength="500" required placeholder="Descreva o projeto do token" rows="3" style="display:block;width:100%;box-sizing:border-box;margin:8px 0 14px;padding:12px;border-radius:8px;border:1px solid #405071;background:#0b1020;color:#eef2ff"></textarea>
+<label for="tokenImage">URL pública da imagem (HTTPS)</label>
+<input id="tokenImage" type="url" required placeholder="https://seusite.com/imagem.png" style="display:block;width:100%;box-sizing:border-box;margin:8px 0 14px;padding:12px;border-radius:8px;border:1px solid #405071;background:#0b1020;color:#eef2ff">
 <div class="grid">
 <div><label for="tokenSupply">Oferta inicial</label><input id="tokenSupply" value="1000" inputmode="decimal" required style="display:block;width:100%;box-sizing:border-box;margin:8px 0 14px;padding:12px;border-radius:8px;border:1px solid #405071;background:#0b1020;color:#eef2ff"></div>
 <div><label for="tokenDecimals">Casas decimais</label><select id="tokenDecimals" style="display:block;width:100%;box-sizing:border-box;margin:8px 0 14px;padding:12px;border-radius:8px;border:1px solid #405071;background:#0b1020;color:#eef2ff"><option value="6" selected>6</option><option value="0">0</option><option value="2">2</option><option value="9">9</option></select></div>
@@ -44,11 +61,55 @@ body{margin:0;padding:32px;max-width:980px;margin-inline:auto}h1{letter-spacing:
 <p id="tokenMessage" role="status" aria-live="polite"></p>
 <div id="tokenResult" hidden></div>
 </form>
-<p style="font-size:.9rem">O token administrativo fica apenas na memória desta página e é enviado no cabeçalho da requisição. Não o compartilhe nem o salve em código público. Criações confirmadas não podem ser desfeitas.</p>
 </section>
-
 <section class="card" style="margin-top:14px"><h2>Próximas etapas</h2><p>Testes unitários → verificação Devnet → testes de transação em rede de testes → criação de tokens → páginas gratuitas → monitoramento diário.</p></section>
 <script>
+
+const loginForm = document.getElementById('loginForm');
+const loginMessage = document.getElementById('loginMessage');
+const creatorFormCard = document.getElementById('creatorFormCard');
+const logoutButton = document.getElementById('logoutButton');
+
+async function refreshAdminSession() {
+  try {
+    const response = await fetch('/api/admin/session', { credentials: 'same-origin' });
+    const data = await response.json();
+    creatorFormCard.hidden = !data.authenticated;
+    document.getElementById('adminToken').disabled = data.authenticated;
+    document.getElementById('loginButton').hidden = data.authenticated;
+    logoutButton.hidden = !data.authenticated;
+    loginMessage.textContent = data.authenticated ? 'Sessão administrativa ativa.' : 'Entre para habilitar a criação.';
+  } catch {
+    loginMessage.textContent = 'Não foi possível verificar a sessão administrativa.';
+  }
+}
+loginForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const button = document.getElementById('loginButton');
+  button.disabled = true;
+  loginMessage.textContent = 'Validando…';
+  try {
+    const response = await fetch('/api/admin/login', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ adminToken: document.getElementById('adminToken').value })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Falha na autenticação');
+    document.getElementById('adminToken').value = '';
+    await refreshAdminSession();
+  } catch (error) {
+    loginMessage.textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+});
+logoutButton.addEventListener('click', async () => {
+  await fetch('/api/admin/logout', { method: 'POST', credentials: 'same-origin' });
+  await refreshAdminSession();
+});
+refreshAdminSession();
 
 const tokenForm = document.getElementById('tokenForm');
 tokenForm.addEventListener('submit', async (event) => {
@@ -56,33 +117,32 @@ tokenForm.addEventListener('submit', async (event) => {
   const button = document.getElementById('createTokenButton');
   const message = document.getElementById('tokenMessage');
   const result = document.getElementById('tokenResult');
-  const adminToken = document.getElementById('adminToken').value.trim();
+  const name = document.getElementById('tokenName').value.trim();
+  const symbol = document.getElementById('tokenSymbol').value.trim();
+  const description = document.getElementById('tokenDescription').value.trim();
+  const imageUrl = document.getElementById('tokenImage').value.trim();
   const initialSupply = document.getElementById('tokenSupply').value.trim();
   const decimals = Number(document.getElementById('tokenDecimals').value);
   result.hidden = true;
   result.textContent = '';
-  if (!adminToken || !initialSupply || !/^(0|[1-9]\d*)(\\.\d+)?$/.test(initialSupply) || Number(initialSupply) <= 0) {
-    message.textContent = 'Informe o token administrativo e uma oferta positiva válida.';
+  if (!name || !symbol || !description || !imageUrl || !initialSupply || !/^(0|[1-9]\d*)(\.\d+)?$/.test(initialSupply) || Number(initialSupply) <= 0) {
+    message.textContent = 'Preencha os dados e informe uma oferta inicial válida.';
     return;
   }
-  if (!confirm('Confirma criar este token na SOLANA DEVNET? A transação usará SOL de teste e não poderá ser desfeita.')) return;
+  if (!confirm('Confirma criar "' + name + '" (' + symbol + ') na SOLANA DEVNET? A transação usará SOL de teste e não poderá ser desfeita.')) return;
   button.disabled = true;
-  button.textContent = 'Enviando transação…';
-  message.textContent = 'Solicitando criação. Não feche esta página nem repita a solicitação.';
+  button.textContent = 'Publicando metadados e enviando transação…';
+  message.textContent = 'Processando. Não feche a página nem repita a solicitação.';
   try {
     const response = await fetch('/api/devnet/tokens', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken },
-      body: JSON.stringify({ initialSupply, decimals })
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ initialSupply, decimals, name, symbol, description, imageUrl })
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Falha ao criar token.');
     message.textContent = data.confirmed ? 'Token criado e confirmado na Devnet.' : 'Solicitação concluída; verifique a confirmação.';
-    const explorer = document.createElement('a');
-    explorer.href = data.explorerUrl;
-    explorer.target = '_blank';
-    explorer.rel = 'noopener noreferrer';
-    explorer.textContent = 'Abrir transação no Solana Explorer';
     const mintLabel = document.createElement('p');
     mintLabel.textContent = 'Endereço do token (Mint): ' + data.mintAddress;
     const copy = document.createElement('button');
@@ -93,11 +153,17 @@ tokenForm.addEventListener('submit', async (event) => {
       try { await navigator.clipboard.writeText(data.mintAddress); copy.textContent = 'Endereço copiado'; }
       catch { mintLabel.textContent = 'Endereço do token (copie manualmente): ' + data.mintAddress; }
     });
+    const explorer = document.createElement('a');
+    explorer.href = data.explorerUrl;
+    explorer.target = '_blank';
+    explorer.rel = 'noopener noreferrer';
+    explorer.textContent = 'Abrir transação no Solana Explorer';
     const signature = document.createElement('p');
     signature.textContent = 'Assinatura: ' + data.signature;
-    result.append(mintLabel, copy, explorer, signature);
+    const metadata = document.createElement('p');
+    metadata.textContent = 'Metadados: ' + (data.metadataUri || 'não informado');
+    result.append(mintLabel, copy, document.createElement('br'), explorer, signature, metadata);
     result.hidden = false;
-    document.getElementById('adminToken').value = '';
   } catch (error) {
     message.textContent = 'Erro: ' + error.message;
   } finally {
