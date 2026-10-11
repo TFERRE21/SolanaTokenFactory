@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile, rename } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { createSplTokenOnDevnet } from "./solana-devnet.js";
 
 const STATE_FILE = process.env.BOT_STATE_FILE || "/data/solanatokenfactory-bot-state.json";
 const START_CAPITAL_BRL = Number(process.env.INITIAL_CAPITAL_BRL ?? 100);
@@ -43,7 +44,7 @@ const BRAND_CONCEPTS = [
 function blankState() {
   return {
     running: false,
-    mode: "simulation",
+    mode: "devnet",
     initialCapitalBrl: START_CAPITAL_BRL,
     targetRecoveryBrl: TARGET_RECOVERY_BRL,
     cycle: 0,
@@ -112,7 +113,7 @@ export async function getBotState() {
 function publicState(state) {
   return {
     running: state.running,
-    mode: "simulation",
+    mode: state.mode || "devnet",
     initialCapitalBrl: state.initialCapitalBrl,
     targetRecoveryBrl: state.targetRecoveryBrl,
     cycle: state.cycle,
@@ -120,20 +121,55 @@ function publicState(state) {
     tokens: state.tokens.map(({ imageDataUrl, ...token }) => token),
     events: state.events.slice(-30),
     updatedAt: state.updatedAt,
-    note: "Simulação: não envia transações, não cria tokens on-chain e não gera lucro real."
+    note: "Tokens são criados on-chain na Solana Devnet. Vendas e recuperação financeira ainda são simuladas; não há operação com dinheiro real."
   };
+}
+async function createTokenOnDevnet(token) {
+  const result = await createSplTokenOnDevnet({
+    initialSupply: process.env.BOT_INITIAL_SUPPLY || "1000",
+    decimals: Number(process.env.BOT_TOKEN_DECIMALS ?? 6),
+    name: token.name,
+    symbol: token.symbol,
+    description: token.description,
+    imageDataUrl: token.imageDataUrl,
+    imageFileName: token.symbol.toLowerCase() + ".svg"
+  });
+  Object.assign(token, {
+    status: "created_on_devnet",
+    network: "devnet",
+    mintAddress: result.mintAddress,
+    tokenAccount: result.tokenAccount,
+    ownerAddress: result.ownerAddress,
+    initialSupply: result.initialSupply,
+    decimals: result.decimals,
+    imageUri: result.imageUri,
+    metadataUri: result.metadataUri,
+    signature: result.signature,
+    explorerUrl: result.explorerUrl,
+    confirmed: result.confirmed,
+    createdOnChainAt: new Date().toISOString()
+  });
+  return token;
 }
 export async function startBot() {
   const state = await loadState();
   if (state.running) return publicState(state);
-  state.running = true;
-  state.events.push({ at: new Date().toISOString(), type: "started", message: "Robô ligado em modo de simulação." });
   if (!state.activeToken) {
-    state.cycle += 1;
-    state.activeToken = generatedToken(state.cycle);
-    state.tokens.unshift(state.activeToken);
-    state.events.push({ at: new Date().toISOString(), type: "created", message: "Conceito de token gerado automaticamente: " + state.activeToken.name });
+    const nextCycle = state.cycle + 1;
+    const token = generatedToken(nextCycle);
+    // Only mark the cycle active after metadata and token are confirmed on Devnet.
+    await createTokenOnDevnet(token);
+    state.cycle = nextCycle;
+    state.activeToken = token;
+    state.tokens.unshift(token);
+    state.events.push({ at: new Date().toISOString(), type: "created_on_devnet", message: "Token criado e confirmado na Solana Devnet: " + token.name + " (" + token.symbol + ") · " + token.mintAddress });
+  } else if (state.activeToken.network !== "devnet" || !state.activeToken.confirmed) {
+    await createTokenOnDevnet(state.activeToken);
+    state.events.push({ at: new Date().toISOString(), type: "created_on_devnet", message: "Token criado e confirmado na Solana Devnet: " + state.activeToken.name + " · " + state.activeToken.mintAddress });
   }
+  state.running = true;
+  state.mode = "devnet";
+  state.events.push({ at: new Date().toISOString(), type: "started", message: "Robô ligado. Criação on-chain habilitada somente na Devnet; vendas ainda não automatizadas." });
   await saveState(state);
   return publicState(state);
 }
@@ -155,10 +191,13 @@ export async function simulateRecovery(proceedsBrl) {
     state.activeToken.closedAt = new Date().toISOString();
     state.events.push({ at: new Date().toISOString(), type: "target", message: "Meta de recuperação simulada atingida; encerrando ciclo e criando o próximo." });
     state.activeToken = null;
-    state.cycle += 1;
-    state.activeToken = generatedToken(state.cycle);
-    state.tokens.unshift(state.activeToken);
-    state.events.push({ at: new Date().toISOString(), type: "created", message: "Novo conceito de token gerado: " + state.activeToken.name });
+    const nextCycle = state.cycle + 1;
+    const nextToken = generatedToken(nextCycle);
+    await createTokenOnDevnet(nextToken);
+    state.cycle = nextCycle;
+    state.activeToken = nextToken;
+    state.tokens.unshift(nextToken);
+    state.events.push({ at: new Date().toISOString(), type: "created_on_devnet", message: "Novo token criado e confirmado na Devnet: " + nextToken.name + " · " + nextToken.mintAddress });
   }
   await saveState(state);
   return publicState(state);
