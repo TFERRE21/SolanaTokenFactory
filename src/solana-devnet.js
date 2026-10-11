@@ -91,7 +91,7 @@ function loadDevnetWallet() {
 }
 
 export function parseTokenAmount(value, decimals) {
-  if (typeof value !== "string" || !/^(0|[1-9]\\d*)(\\.\\d+)?$/.test(value)) {
+  if (typeof value !== "string" || !/^(0|[1-9]\d*)(\.\d+)?$/.test(value)) {
     throw new TypeError('initialSupply must be a positive decimal string, such as "1000"');
   }
   const [whole, fraction = ""] = value.split(".");
