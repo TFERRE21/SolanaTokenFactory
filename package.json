@@ -9,7 +9,7 @@
     "dev": "node src/server.js",
     "start": "NODE_ENV=production node src/server.js",
     "test": "node --test",
-    "check": "node --check src/server.js && node --check src/sell-engine.js && node --check src/config.js && node --check src/solana-devnet.js"
+    "check": "node --check src/server.js && node --check src/sell-engine.js && node --check src/config.js && node --check src/solana-devnet.js && node --check src/bot-engine.js"
   },
   "dependencies": {
     "@solana/web3.js": "^1.98.4"
