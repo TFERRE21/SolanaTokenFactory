@@ -24,26 +24,37 @@ function borshString(value) {
   const b = Buffer.from(value, "utf8");
   return Buffer.concat([u32le(b.length), b]);
 }
-async function pinTokenMetadata({ name, symbol, description, imageUrl }) {
+async function pinTokenMetadata({ name, symbol, description, imageUrl, imageDataUrl, imageFileName }) {
   const jwt = process.env.PINATA_JWT;
   if (!jwt) throw new Error("Configure PINATA_JWT no iContainer para publicar os metadados do token.");
-  const image = new URL(imageUrl);
-  if (image.protocol !== "https:") throw new Error("A URL da imagem precisa usar HTTPS.");
-  const metadata = {
-    name, symbol, description,
-    image: image.toString(),
-    properties: { files: [{ uri: image.toString(), type: "image" }], category: "image" }
-  };
+  let imageUri;
+  if (imageDataUrl) {
+    const match = /^data:(image\/(?:png|jpeg|webp|gif|svg\+xml));base64,([A-Za-z0-9+/=]+)$/.exec(imageDataUrl);
+    if (!match) throw new Error("Imagem inválida. Use PNG, JPG, WEBP, GIF ou SVG.");
+    const mime = match[1];
+    const bytes = Buffer.from(match[2], "base64");
+    if (!bytes.length || bytes.length > 2 * 1024 * 1024) throw new Error("A imagem deve ter no máximo 2 MB.");
+    const form = new FormData();
+    const extension = mime.split("/")[1].replace("+xml", "");
+    form.append("file", new Blob([bytes], { type: mime }), (imageFileName || ("token-image." + extension)).replace(/[^a-zA-Z0-9._-]/g, "_"));
+    form.append("pinataMetadata", JSON.stringify({ name: symbol + "-image" }));
+    const uploaded = await fetch("https://api.pinata.cloud/pinning/pinFileToIPFS", { method: "POST", headers: { Authorization: "Bearer " + jwt }, body: form });
+    const fileResult = await uploaded.json().catch(() => ({}));
+    if (!uploaded.ok || !fileResult.IpfsHash) throw new Error("Falha ao enviar a imagem ao Pinata. Confira PINATA_JWT e as permissões da chave.");
+    imageUri = "https://gateway.pinata.cloud/ipfs/" + fileResult.IpfsHash;
+  } else if (imageUrl) {
+    const image = new URL(imageUrl);
+    if (image.protocol !== "https:") throw new Error("A URL da imagem precisa usar HTTPS.");
+    imageUri = image.toString();
+  } else { throw new Error("Selecione uma imagem para o token."); }
+  const metadata = { name, symbol, description, image: imageUri, properties: { files: [{ uri: imageUri, type: "image" }], category: "image" } };
   const response = await fetch("https://api.pinata.cloud/pinning/pinJSONToIPFS", {
-    method: "POST",
-    headers: { "Authorization": `Bearer ${jwt}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ pinataContent: metadata, pinataMetadata: { name: `${symbol}-metadata.json` } })
+    method: "POST", headers: { Authorization: "Bearer " + jwt, "Content-Type": "application/json" },
+    body: JSON.stringify({ pinataContent: metadata, pinataMetadata: { name: symbol + "-metadata.json" } })
   });
   const result = await response.json().catch(() => ({}));
-  if (!response.ok || !result.IpfsHash) {
-    throw new Error("Falha ao publicar metadados no Pinata. Confira PINATA_JWT.");
-  }
-  return `https://gateway.pinata.cloud/ipfs/${result.IpfsHash}`;
+  if (!response.ok || !result.IpfsHash) throw new Error("Falha ao publicar metadados no Pinata. Confira PINATA_JWT.");
+  return { metadataUri: "https://gateway.pinata.cloud/ipfs/" + result.IpfsHash, imageUri };
 }
 function buildCreateMetadataInstruction({ mint, authority, payer, uri, name, symbol }) {
   const [metadata] = PublicKey.findProgramAddressSync(
@@ -238,7 +249,7 @@ export function buildMintToInstruction(mint, destination, authority, amount) {
  * SPL instruction layouts are defined here to avoid the vulnerable
  * bigint-buffer dependency pulled in by @solana/spl-token.
  */
-export async function createSplTokenOnDevnet({ initialSupply, decimals = 6, name, symbol, description, imageUrl }) {
+export async function createSplTokenOnDevnet({ initialSupply, decimals = 6, name, symbol, description, imageUrl, imageDataUrl, imageFileName }) {
   const endpoint = getDevnetRpcUrl();
   if (!Number.isInteger(decimals) || decimals < 0 || decimals > 9) {
     throw new RangeError("decimals must be an integer from 0 to 9");
@@ -250,9 +261,11 @@ export async function createSplTokenOnDevnet({ initialSupply, decimals = 6, name
     }
   }
   if (typeof imageUrl !== "string" || !imageUrl.trim()) throw new TypeError("imageUrl is required (public HTTPS image URL)");
-  const metadataUri = await pinTokenMetadata({
-    name: name.trim(), symbol: symbol.trim(), description: description.trim(), imageUrl: imageUrl.trim()
+  const pinned = await pinTokenMetadata({
+    name: name.trim(), symbol: symbol.trim(), description: description.trim(),
+    imageUrl: imageUrl?.trim(), imageDataUrl, imageFileName
   });
+  const metadataUri = pinned.metadataUri;
   const payer = loadDevnetWallet();
   const connection = new Connection(endpoint, { commitment: "confirmed" });
   const mint = Keypair.generate();
