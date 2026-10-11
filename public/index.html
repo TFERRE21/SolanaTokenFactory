@@ -43,6 +43,10 @@ body{margin:0;padding:32px;max-width:980px;margin-inline:auto}h1{letter-spacing:
 <button id="botStart" type="button" style="padding:12px 18px;border:0;border-radius:9px;background:#14f195;color:#052014;font-weight:700;cursor:pointer">LIGAR ROBÔ</button>
 <button id="botStop" type="button" style="padding:12px 18px;border:1px solid #405071;border-radius:9px;background:#0b1020;color:#eef2ff;cursor:pointer">DESLIGAR</button>
 </div>
+<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px">
+<button id="verifyToken" type="button" style="padding:10px 14px;border:1px solid #405071;border-radius:9px;background:#0b1020;color:#eef2ff;cursor:pointer">VERIFICAR TOKEN + METADADOS</button>
+<span id="verifyTokenStatus" role="status" aria-live="polite">Verificação ainda não executada.</span>
+</div>
 <div id="botActiveToken" style="margin-top:14px"></div>
 <div style="margin-top:14px;padding:12px;border:1px solid #283653;border-radius:10px">
 <strong>Recebimento simulado</strong><p>Teste a regra de ciclo sem dinheiro real. Um novo ciclo só começa quando a meta simulada for atingida.</p>
