@@ -5,7 +5,8 @@ const numberFromEnv = (key, fallback) => {
 };
 
 export const config = Object.freeze({
-  port: Math.trunc(numberFromEnv("APP_PORT", 3000)),
+  // Hosting platforms commonly inject PORT. APP_PORT remains a local fallback.
+  port: Math.trunc(numberFromEnv("PORT", numberFromEnv("APP_PORT", 3000))),
   tradingMode: process.env.TRADING_MODE ?? "simulation",
   solanaCluster: process.env.SOLANA_CLUSTER ?? "devnet",
   targetMultiple: numberFromEnv("TARGET_MULTIPLE", 2),
