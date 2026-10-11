@@ -106,7 +106,21 @@ async function generateConcept(cycle, existingTokens) {
     })
   });
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error("OpenAI não conseguiu gerar o conceito (HTTP " + response.status + "). Confira OPENAI_API_KEY e OPENAI_MODEL no VPS.");
+  if (!response.ok) {
+    const apiError = payload.error || {};
+    const type = String(apiError.type || apiError.code || "unknown");
+    const safeMessage = String(apiError.message || "A API não informou detalhes.").replace(/sk-[A-Za-z0-9_-]{8,}/g, "[CHAVE OCULTA]").slice(0, 500);
+    if (response.status === 429 && (type.includes("quota") || String(apiError.code || "").includes("quota"))) {
+      throw new Error("OpenAI sem cota/crédito disponível (HTTP 429). Confira Usage, Billing e limites do projeto na plataforma OpenAI. Detalhe: " + safeMessage);
+    }
+    if (response.status === 429) {
+      throw new Error("Limite de requisições da OpenAI atingido (HTTP 429). Aguarde e tente novamente. Tipo: " + type + ". Detalhe: " + safeMessage);
+    }
+    if (response.status === 401 || response.status === 403) {
+      throw new Error("A OpenAI recusou a autenticação/permissão (HTTP " + response.status + "). Confira a chave e o projeto da API no VPS. Tipo: " + type + ". Detalhe: " + safeMessage);
+    }
+    throw new Error("Falha na OpenAI (HTTP " + response.status + "). Tipo: " + type + ". Detalhe: " + safeMessage);
+  }
   const output = (payload.output || []).flatMap(item => item.content || []).find(item => item.type === "output_text")?.text || payload.output_text;
   if (!output) throw new Error("OpenAI retornou uma resposta vazia para o conceito.");
   let data;
