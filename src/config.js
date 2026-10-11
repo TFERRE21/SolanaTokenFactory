@@ -16,7 +16,8 @@ export const config = Object.freeze({
   autoLaunchEnabled: process.env.AUTO_LAUNCH_ENABLED === "true",
   autoSellEnabled: process.env.AUTO_SELL_ENABLED === "true",
   tokenCreationEnabled: process.env.TOKEN_CREATION_ENABLED === "true",
-  adminApiToken: process.env.ADMIN_API_TOKEN ?? ""
+  adminApiToken: process.env.ADMIN_API_TOKEN ?? "",
+  adminPanelPassword: process.env.ADMIN_PANEL_PASSWORD ?? ""
 });
 
 if (!["simulation", "devnet"].includes(config.tradingMode)) {
