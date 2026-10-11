@@ -12,9 +12,9 @@ body{margin:0;padding:32px;max-width:980px;margin-inline:auto}h1{letter-spacing:
 </head>
 <body>
 <h1>🚀 SolanaTokenFactory</h1>
-<p>Central de controle do ecossistema de tokens. Esta versão está em simulação: nenhuma transação real é enviada.</p>
+<p>Central de controle do SolanaTokenFactory. A criação de tokens e metadados é enviada à Solana Devnet; vendas e recuperação financeira permanecem em simulação.</p>
 <div class="grid">
-<section class="card"><p>Modo</p><div class="value status" id="mode">SIMULAÇÃO</div></section>
+<section class="card"><p>Modo</p><div class="value status" id="mode">DEVNET</div></section>
 <section class="card"><p>Capital de referência</p><div class="value">R$ 100,00</div></section>
 <section class="card"><p>Exemplo de posição</p><div class="value">R$ 200,00</div></section>
 <section class="card"><p>Meta de recebimento</p><div class="value">R$ 195,00</div></section>
@@ -31,8 +31,8 @@ body{margin:0;padding:32px;max-width:980px;margin-inline:auto}h1{letter-spacing:
 </section>
 
 <section class="card" style="margin-top:14px" id="autonomousBot">
-<h2>Robô autônomo · Simulação</h2>
-<p>Gera nome, símbolo, descrição e arte automaticamente e registra ciclos. Nesta etapa é simulação: não cria tokens on-chain, não negocia e não gera lucro real.</p>
+<h2>Robô autônomo · Solana Devnet</h2>
+<p>Ao ligar, gera nome, símbolo, descrição e arte, publica imagem e metadados no IPFS via Pinata e cria o token SPL diretamente na Solana Devnet. A criação envia transações on-chain e consome SOL de teste. Vendas e lucro ainda não são automatizados.</p>
 <div class="grid">
 <div><p>Estado</p><div class="value status" id="botState">PAUSADO</div></div>
 <div><p>Ciclo</p><div class="value" id="botCycle">0</div></div>
@@ -80,7 +80,7 @@ body{margin:0;padding:32px;max-width:980px;margin-inline:auto}h1{letter-spacing:
 const money = value => new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(Number(value||0));
 async function refreshBot(){
  const response=await fetch('/api/bot',{cache:'no-store'}); const bot=await response.json();
- document.getElementById('botState').textContent=bot.running?'LIGADO · SIMULAÇÃO':'PAUSADO';
+ document.getElementById('botState').textContent=bot.running?'LIGADO · DEVNET':'PAUSADO';
  document.getElementById('botCycle').textContent=String(bot.cycle);
  document.getElementById('botCapital').textContent=money(bot.initialCapitalBrl);
  document.getElementById('botTarget').textContent=money(bot.targetRecoveryBrl);
@@ -90,12 +90,21 @@ async function refreshBot(){
   const img=document.createElement('img');img.alt='Arte de '+bot.activeToken.name;img.width=88;img.height=88;img.style.cssText='border-radius:12px;object-fit:cover;background:#0b1020';img.src='data:image/svg+xml;base64,'+btoa(unescape(encodeURIComponent(bot.activeToken.imageSvg||'')));
   const details=document.createElement('div');const title=document.createElement('strong');title.textContent=bot.activeToken.name+' ('+bot.activeToken.symbol+')';
   const desc=document.createElement('p');desc.textContent=bot.activeToken.description;
-  const value=document.createElement('p');value.textContent='Valor simulado: '+money(bot.activeToken.simulatedValueBrl)+' · Recebido: '+money(bot.activeToken.simulatedProceedsBrl);
-  details.append(title,desc,value);card.append(img,details);active.append(card);
+  const value=document.createElement('p');value.textContent='Rede: '+(bot.activeToken.network||'simulação')+' · Oferta: '+(bot.activeToken.initialSupply||'—')+' · Decimais: '+(bot.activeToken.decimals??'—');
+  details.append(title,desc,value);
+  if(bot.activeToken.mintAddress){const mint=document.createElement('p');mint.textContent='Mint: '+bot.activeToken.mintAddress;details.append(mint);}
+  if(bot.activeToken.metadataUri){const metadata=document.createElement('p');const link=document.createElement('a');link.href=bot.activeToken.metadataUri;link.target='_blank';link.rel='noopener noreferrer';link.textContent='Metadados IPFS';metadata.append(link);details.append(metadata);}
+  if(bot.activeToken.explorerUrl){const explorer=document.createElement('p');const link=document.createElement('a');link.href=bot.activeToken.explorerUrl;link.target='_blank';link.rel='noopener noreferrer';link.textContent='Ver transação confirmada no Explorer';explorer.append(link);details.append(explorer);}
+  const valueSim=document.createElement('p');valueSim.textContent='Recebimento de venda (simulado): '+money(bot.activeToken.simulatedProceedsBrl);details.append(valueSim);
+  card.append(img,details);active.append(card);
  }else active.textContent='Nenhum ciclo ativo.';
  const tokens=document.getElementById('botTokens');tokens.textContent='';
  if(!bot.tokens.length)tokens.textContent='Nenhum ciclo registrado.';
- for(const token of bot.tokens){const row=document.createElement('div');row.style.cssText='padding:10px 0;border-bottom:1px solid #283653';const title=document.createElement('strong');title.textContent='#'+token.cycle+' · '+token.name+' ('+token.symbol+')';const info=document.createElement('p');info.textContent=token.status+' · '+new Date(token.createdAt).toLocaleString('pt-BR')+' · recebido simulado: '+money(token.simulatedProceedsBrl);row.append(title,info);tokens.append(row);}
+ for(const token of bot.tokens){const row=document.createElement('div');row.style.cssText='padding:10px 0;border-bottom:1px solid #283653';const title=document.createElement('strong');title.textContent='#'+token.cycle+' · '+token.name+' ('+token.symbol+')';const info=document.createElement('p');info.textContent=token.status+' · '+(token.network||'simulação')+' · '+new Date(token.createdAt).toLocaleString('pt-BR');
+  row.append(title,info);
+  if(token.mintAddress){const mint=document.createElement('p');mint.textContent='Mint: '+token.mintAddress;row.append(mint);}
+  if(token.explorerUrl){const a=document.createElement('a');a.href=token.explorerUrl;a.target='_blank';a.rel='noopener noreferrer';a.textContent='Abrir transação no Solana Explorer';row.append(a);}
+  tokens.append(row);}
  const events=document.getElementById('botEvents');events.textContent='';for(const event of [...bot.events].reverse()){const p=document.createElement('p');p.textContent=new Date(event.at).toLocaleString('pt-BR')+' — '+event.message;events.append(p);}
 }
 async function botAction(route,body){const msg=document.getElementById('botMessage');msg.textContent='Processando…';try{const response=await fetch(route,{method:'POST',headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});const data=await response.json();if(!response.ok)throw new Error(data.error||'Falha');msg.textContent='Atualizado.';await refreshBot();}catch(error){msg.textContent='Erro: '+error.message;}}
