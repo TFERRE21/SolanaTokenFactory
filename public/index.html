@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SolanaTokenFactory · Painel</title>
+<style>
+:root{color-scheme:dark;font-family:Inter,system-ui,sans-serif;background:#0b1020;color:#eef2ff}
+body{margin:0;padding:32px;max-width:980px;margin-inline:auto}h1{letter-spacing:-.04em}p{color:#aab5d1;line-height:1.6}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px}.card{background:#131b30;border:1px solid #283653;border-radius:16px;padding:18px}
+.value{font-size:1.45rem;font-weight:700}.status{color:#86efac}.warn{border-color:#a16207}code{color:#93c5fd}
+</style>
+</head>
+<body>
+<h1>🚀 SolanaTokenFactory</h1>
+<p>Central de controle do ecossistema de tokens. Esta versão está em simulação: nenhuma transação real é enviada.</p>
+<div class="grid">
+<section class="card"><p>Modo</p><div class="value status" id="mode">SIMULAÇÃO</div></section>
+<section class="card"><p>Capital de referência</p><div class="value">R$ 100,00</div></section>
+<section class="card"><p>Exemplo de posição</p><div class="value">R$ 200,00</div></section>
+<section class="card"><p>Meta de recebimento</p><div class="value">R$ 195,00</div></section>
+</div>
+<section class="card warn" style="margin-top:14px">
+<h2>Validação das vendas</h2>
+<p id="plan">Carregando status do motor de simulação…</p>
+<p>Uma venda só será contabilizada após confirmação on-chain. Cotação, liquidez, taxas e slippage podem alterar o resultado.</p>
+</section>
+<section class="card" style="margin-top:14px"><h2>Próximas etapas</h2><p>Testes unitários → Solana devnet → validação de confirmação e idempotência → criação de tokens → páginas gratuitas → monitoramento diário.</p></section>
+<script>
+fetch('/api/status').then(r=>r.json()).then(s=>{
+ document.getElementById('mode').textContent=s.mode.toUpperCase();
+ const p=s.sellPlanExample;
+ document.getElementById('plan').textContent=p.status==='target_estimable'
+ ? 'Plano calculado: vender aproximadamente '+(p.sellFraction*100).toFixed(2)+'% da posição e reter '+(p.retainedFraction*100).toFixed(2)+'%. Estimativa apenas; sem transação.'
+ : 'Venda bloqueada ou meta não estimável: '+p.status;
+}).catch(()=>document.getElementById('plan').textContent='Não foi possível carregar o status.');
+</script>
+</body></html>
