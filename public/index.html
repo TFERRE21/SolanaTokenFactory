@@ -87,13 +87,13 @@ async function refreshBot(){
  const active=document.getElementById('botActiveToken'); active.textContent='';
  if(bot.activeToken){
   const card=document.createElement('div');card.style.cssText='display:flex;gap:14px;align-items:center;padding:12px;border:1px solid #283653;border-radius:10px';
-  const img=document.createElement('img');img.alt='Arte de '+bot.activeToken.name;img.width=88;img.height=88;img.style.cssText='border-radius:12px;object-fit:cover;background:#0b1020';img.src='data:image/svg+xml;base64,'+btoa(unescape(encodeURIComponent(bot.activeToken.imageSvg||'')));
+  const img=document.createElement('img');img.alt='Arte de '+bot.activeToken.name;img.width=88;img.height=88;img.style.cssText='border-radius:12px;object-fit:cover;background:#0b1020';img.src=bot.activeToken.imageUri||('data:image/svg+xml;base64,'+btoa(unescape(encodeURIComponent(bot.activeToken.imageSvg||''))));
   const details=document.createElement('div');const title=document.createElement('strong');title.textContent=bot.activeToken.name+' ('+bot.activeToken.symbol+')';
   const desc=document.createElement('p');desc.textContent=bot.activeToken.description;
-  const value=document.createElement('p');value.textContent='Rede: '+(bot.activeToken.network||'simulação')+' · Oferta: '+(bot.activeToken.initialSupply||'—')+' · Decimais: '+(bot.activeToken.decimals??'—');
+  const value=document.createElement('p');value.textContent='Status: '+(bot.activeToken.confirmed?'CONFIRMADO NA DEVNET':'PENDENTE')+' · Rede: '+(bot.activeToken.network||'simulação')+' · Oferta: '+(bot.activeToken.initialSupply||'—')+' · Decimais: '+(bot.activeToken.decimals??'—');
   details.append(title,desc,value);
   if(bot.activeToken.mintAddress){const mint=document.createElement('p');mint.textContent='Mint: '+bot.activeToken.mintAddress;details.append(mint);}
-  if(bot.activeToken.metadataUri){const metadata=document.createElement('p');const link=document.createElement('a');link.href=bot.activeToken.metadataUri;link.target='_blank';link.rel='noopener noreferrer';link.textContent='Metadados IPFS';metadata.append(link);details.append(metadata);}
+  if(bot.activeToken.metadataUri){const metadata=document.createElement('p');const link=document.createElement('a');link.href=bot.activeToken.metadataUri;link.target='_blank';link.rel='noopener noreferrer';link.textContent='Abrir metadados JSON (nome, símbolo, descrição e imagem)';metadata.append(link);details.append(metadata);const imageLink=document.createElement('p');const imageAnchor=document.createElement('a');imageAnchor.href=bot.activeToken.imageUri||'#';imageAnchor.target='_blank';imageAnchor.rel='noopener noreferrer';imageAnchor.textContent='Abrir imagem publicada no IPFS';imageLink.append(imageAnchor);details.append(imageLink);}
   if(bot.activeToken.explorerUrl){const explorer=document.createElement('p');const link=document.createElement('a');link.href=bot.activeToken.explorerUrl;link.target='_blank';link.rel='noopener noreferrer';link.textContent='Ver transação confirmada no Explorer';explorer.append(link);details.append(explorer);}
   const valueSim=document.createElement('p');valueSim.textContent='Recebimento de venda (simulado): '+money(bot.activeToken.simulatedProceedsBrl);details.append(valueSim);
   card.append(img,details);active.append(card);
@@ -102,7 +102,7 @@ async function refreshBot(){
  if(!bot.tokens.length)tokens.textContent='Nenhum ciclo registrado.';
  for(const token of bot.tokens){const row=document.createElement('div');row.style.cssText='padding:10px 0;border-bottom:1px solid #283653';const title=document.createElement('strong');title.textContent='#'+token.cycle+' · '+token.name+' ('+token.symbol+')';const info=document.createElement('p');info.textContent=token.status+' · '+(token.network||'simulação')+' · '+new Date(token.createdAt).toLocaleString('pt-BR');
   row.append(title,info);
-  if(token.mintAddress){const mint=document.createElement('p');mint.textContent='Mint: '+token.mintAddress;row.append(mint);}
+  if(token.mintAddress){const mint=document.createElement('p');mint.textContent='Mint: '+token.mintAddress+' · '+(token.confirmed?'Confirmado na Devnet':'Pendente');row.append(mint);}if(token.metadataUri){const meta=document.createElement('a');meta.href=token.metadataUri;meta.target='_blank';meta.rel='noopener noreferrer';meta.textContent='Metadados IPFS';row.append(meta);}
   if(token.explorerUrl){const a=document.createElement('a');a.href=token.explorerUrl;a.target='_blank';a.rel='noopener noreferrer';a.textContent='Abrir transação no Solana Explorer';row.append(a);}
   tokens.append(row);}
  const events=document.getElementById('botEvents');events.textContent='';for(const event of [...bot.events].reverse()){const p=document.createElement('p');p.textContent=new Date(event.at).toLocaleString('pt-BR')+' — '+event.message;events.append(p);}
