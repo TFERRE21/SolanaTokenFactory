@@ -110,6 +110,46 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (req.method === "GET" && req.url === "/api/bot/prices") {
+    try {
+      const bot = await getBotState();
+      const tokens = bot.tokens || [];
+      const prices = await Promise.all(tokens.map(async token => {
+        if (!token.mintAddress) return { mintAddress: null, name: token.name, symbol: token.symbol, status: "not_created_on_chain", message: "Token ainda não criado on-chain." };
+        if (token.network !== "mainnet-beta") return {
+          mintAddress: token.mintAddress, name: token.name, symbol: token.symbol,
+          network: token.network || "devnet", status: "no_market_data",
+          priceUsd: null, liquidityUsd: null, volume24hUsd: null, change24hPct: null,
+          message: "Tokens Devnet não possuem cotação de mercado real. Dados de preço só serão consultados para tokens Mainnet com pares indexados."
+        };
+        try {
+          const response = await fetch("https://api.dexscreener.com/latest/dex/tokens/" + encodeURIComponent(token.mintAddress), { signal: AbortSignal.timeout(8000) });
+          if (!response.ok) throw new Error("DexScreener HTTP " + response.status);
+          const payload = await response.json();
+          const pairs = (payload.pairs || []).filter(pair => pair.chainId === "solana" && pair.priceUsd && Number.isFinite(Number(pair.priceUsd)));
+          if (!pairs.length) return { mintAddress: token.mintAddress, name: token.name, symbol: token.symbol, network: token.network, status: "no_liquidity", priceUsd: null, liquidityUsd: null, volume24hUsd: null, change24hPct: null, message: "Nenhum mercado Solana com preço disponível." };
+          pairs.sort((a,b) => Number(b.liquidity?.usd || 0) - Number(a.liquidity?.usd || 0));
+          const pair = pairs[0];
+          return {
+            mintAddress: token.mintAddress, name: token.name, symbol: token.symbol, network: token.network,
+            status: "market_data", priceUsd: Number(pair.priceUsd),
+            liquidityUsd: Number(pair.liquidity?.usd || 0),
+            volume24hUsd: Number(pair.volume?.h24 || 0),
+            change24hPct: Number(pair.priceChange?.h24 || 0),
+            pairUrl: pair.url || null, pairAddress: pair.pairAddress || null,
+            updatedAt: new Date().toISOString()
+          };
+        } catch (error) {
+          return { mintAddress: token.mintAddress, name: token.name, symbol: token.symbol, network: token.network, status: "lookup_error", message: error.message };
+        }
+      }));
+      json(res, 200, { ok: true, checkedAt: new Date().toISOString(), prices });
+    } catch (error) {
+      json(res, 500, { ok: false, error: error.message || "Falha ao consultar preços." });
+    }
+    return;
+  }
+
   if (req.method === "GET" && req.url === "/api/bot/verify") {
     try {
       const bot = await getBotState();
