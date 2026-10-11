@@ -156,7 +156,11 @@ async function createTokenOnDevnet(token) {
 export async function startBot() {
   const state = await loadState();
   if (state.running) return publicState(state);
-  if (state.awaitingConfirmedProceeds) throw new Error("Ciclo bloqueado: meta simulada atingida. O próximo token só poderá ser criado após integrar e confirmar uma venda real; Devnet não gera recebimento em reais.");
+  if (state.awaitingConfirmedProceeds) {
+    // A manual restart may create the next TEST token on Devnet, but it is never treated as a real financial cycle.
+    state.awaitingConfirmedProceeds = false;
+    state.events.push({ at: new Date().toISOString(), type: "test_cycle_restart", message: "Novo ciclo de TESTE autorizado manualmente. Nome, símbolo, descrição e imagem serão alternados; recebimento permanece simulado." });
+  }
   if (!state.activeToken) {
     const nextCycle = state.cycle + 1;
     const token = generatedToken(nextCycle);
