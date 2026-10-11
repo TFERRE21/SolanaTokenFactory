@@ -93,11 +93,11 @@ loginForm.addEventListener('submit', async (event) => {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ adminToken: document.getElementById('adminToken').value })
+      body: JSON.stringify({ adminPassword: document.getElementById('adminPassword').value })
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Falha na autenticação');
-    document.getElementById('adminToken').value = '';
+    document.getElementById('adminPassword').value = '';
     await refreshAdminSession();
   } catch (error) {
     loginMessage.textContent = error.message;
