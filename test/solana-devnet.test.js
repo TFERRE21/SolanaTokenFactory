@@ -1,6 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { checkSolanaDevnet, parseTokenAmount } from "../src/solana-devnet.js";
+import { Keypair, PublicKey } from "@solana/web3.js";
+import {
+  buildInitializeMintInstruction,
+  buildMintToInstruction,
+  deriveAssociatedTokenAddress,
+  checkSolanaDevnet,
+  parseTokenAmount
+} from "../src/solana-devnet.js";
 
 test("Devnet check uses read-only health and slot RPC methods", async () => {
   const previous = process.env.SOLANA_RPC_URL;
@@ -50,4 +57,35 @@ test("token amount parser rejects zero, malformed amounts and excess decimals", 
   assert.throws(() => parseTokenAmount("-1", 6), /positive decimal string/);
   assert.throws(() => parseTokenAmount("1.123", 2), /more than 2 decimal places/);
   assert.throws(() => parseTokenAmount("1e6", 6), /positive decimal string/);
+});
+
+test("manual InitializeMint instruction encodes decimals and authority correctly", () => {
+  const mint = Keypair.generate().publicKey;
+  const authority = Keypair.generate().publicKey;
+  const instruction = buildInitializeMintInstruction(mint, 6, authority);
+  assert.equal(instruction.data.length, 35);
+  assert.equal(instruction.data[0], 0);
+  assert.equal(instruction.data[1], 6);
+  assert.deepEqual(instruction.data.subarray(2, 34), authority.toBuffer());
+  assert.equal(instruction.data[34], 0);
+  assert.equal(instruction.keys[0].pubkey.toBase58(), mint.toBase58());
+});
+
+test("manual MintTo instruction encodes unsigned 64-bit amount", () => {
+  const mint = Keypair.generate().publicKey;
+  const destination = Keypair.generate().publicKey;
+  const authority = Keypair.generate().publicKey;
+  const instruction = buildMintToInstruction(mint, destination, authority, 123456789n);
+  assert.equal(instruction.data.length, 9);
+  assert.equal(instruction.data[0], 7);
+  assert.equal(instruction.data.readBigUInt64LE(1), 123456789n);
+  assert.equal(instruction.keys[2].isSigner, true);
+  assert.throws(() => buildMintToInstruction(mint, destination, authority, 0n), /positive unsigned 64-bit integer/);
+});
+
+test("associated token address derivation returns a valid public key", () => {
+  const owner = Keypair.generate().publicKey;
+  const mint = Keypair.generate().publicKey;
+  assert.ok(deriveAssociatedTokenAddress(owner, mint) instanceof PublicKey);
+  assert.equal(deriveAssociatedTokenAddress(owner, mint).toBase58().length, 44);
 });
