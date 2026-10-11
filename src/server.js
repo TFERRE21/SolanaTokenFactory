@@ -1,6 +1,6 @@
 import http from "node:http";
 import { readFile } from "node:fs/promises";
-import { timingSafeEqual } from "node:crypto";
+import { timingSafeEqual, randomBytes } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { config } from "./config.js";
@@ -12,6 +12,27 @@ const json = (res, status, payload) => {
   res.writeHead(status, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
   res.end(JSON.stringify(payload));
 };
+
+const adminSessions = new Map();
+const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
+
+function readCookie(req, name) {
+  const cookie = req.headers.cookie || "";
+  for (const part of cookie.split(";")) {
+    const [key, ...value] = part.trim().split("=");
+    if (key === name) return value.join("=");
+  }
+  return "";
+}
+function validAdminSession(req) {
+  const id = readCookie(req, "stf_admin");
+  const expires = adminSessions.get(id);
+  if (!id || !expires || expires < Date.now()) {
+    if (id) adminSessions.delete(id);
+    return false;
+  }
+  return true;
+}
 
 function adminTokenMatches(provided, expected) {
   if (!provided || !expected) return false;
@@ -36,6 +57,44 @@ async function readJsonBody(req, maxBytes = 8192) {
 const server = http.createServer(async (req, res) => {
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("Referrer-Policy", "no-referrer");
+
+  if (req.method === "POST" && req.url === "/api/admin/login") {
+    try {
+      const body = await readJsonBody(req);
+      if (!adminTokenMatches(body.adminToken, config.adminApiToken)) {
+        json(res, 401, { error: "Token administrativo inválido" });
+        return;
+      }
+      const session = randomBytes(32).toString("hex");
+      adminSessions.set(session, Date.now() + SESSION_TTL_MS);
+      res.writeHead(200, {
+        "Content-Type": "application/json; charset=utf-8",
+        "Cache-Control": "no-store",
+        "Set-Cookie": `stf_admin=${session}; HttpOnly; SameSite=Strict; Path=/; Max-Age=28800; Secure`
+      });
+      res.end(JSON.stringify({ ok: true, expiresInSeconds: 28800 }));
+    } catch (error) {
+      json(res, error.statusCode || 400, { error: error.message || "Falha na autenticação" });
+    }
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/api/admin/logout") {
+    const id = readCookie(req, "stf_admin");
+    if (id) adminSessions.delete(id);
+    res.writeHead(200, {
+      "Content-Type": "application/json; charset=utf-8",
+      "Set-Cookie": "stf_admin=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0; Secure",
+      "Cache-Control": "no-store"
+    });
+    res.end(JSON.stringify({ ok: true }));
+    return;
+  }
+
+  if (req.method === "GET" && req.url === "/api/admin/session") {
+    json(res, 200, { authenticated: validAdminSession(req) });
+    return;
+  }
 
   if (req.method === "GET" && req.url === "/api/status") {
     json(res, 200, {
@@ -71,7 +130,7 @@ const server = http.createServer(async (req, res) => {
       json(res, 403, { error: "Token creation is disabled. Explicitly enable Devnet mode and TOKEN_CREATION_ENABLED." });
       return;
     }
-    if (!adminTokenMatches(req.headers["x-admin-token"], config.adminApiToken)) {
+    if (!validAdminSession(req)) {
       json(res, 401, { error: "Unauthorized" });
       return;
     }
