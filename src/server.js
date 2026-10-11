@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { config } from "./config.js";
 import { calculateSellPlan } from "./sell-engine.js";
-import { checkSolanaDevnet, createSplTokenOnDevnet } from "./solana-devnet.js";
+import { checkSolanaDevnet, createSplTokenOnDevnet, verifyTokenOnDevnet } from "./solana-devnet.js";
 import { getBotState, startBot, stopBot, simulateRecovery } from "./bot-engine.js";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
@@ -107,6 +107,26 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === "GET" && req.url === "/api/admin/session") {
     json(res, 200, { authenticated: validAdminSession(req) });
+    return;
+  }
+
+  if (req.method === "GET" && req.url === "/api/bot/verify") {
+    try {
+      const bot = await getBotState();
+      const token = bot.activeToken;
+      if (!token || !token.mintAddress || !token.signature || !token.metadataUri) {
+        json(res, 409, { ok: false, error: "Não há token ativo com endereço, assinatura e metadados para verificar." });
+        return;
+      }
+      const result = await verifyTokenOnDevnet({
+        mintAddress: token.mintAddress,
+        signature: token.signature,
+        metadataUri: token.metadataUri
+      });
+      json(res, result.ok ? 200 : 409, result);
+    } catch (error) {
+      json(res, 400, { ok: false, error: error.message || "Falha na verificação Devnet." });
+    }
     return;
   }
 
