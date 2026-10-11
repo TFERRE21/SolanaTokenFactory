@@ -112,6 +112,24 @@ async function refreshBot(){
  const events=document.getElementById('botEvents');events.textContent='';for(const event of [...bot.events].reverse()){const p=document.createElement('p');p.textContent=new Date(event.at).toLocaleString('pt-BR')+' — '+event.message;events.append(p);}
 }
 async function botAction(route,body){const msg=document.getElementById('botMessage');msg.textContent='Processando…';try{const response=await fetch(route,{method:'POST',headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});const data=await response.json();if(!response.ok)throw new Error(data.error||'Falha');msg.textContent='Atualizado.';await refreshBot();}catch(error){msg.textContent='Erro: '+error.message;}}
+document.getElementById('verifyToken').addEventListener('click',async()=>{
+ const status=document.getElementById('verifyTokenStatus');status.textContent='Verificando blockchain, transação, JSON e imagem IPFS...';
+ const button=document.getElementById('verifyToken');button.disabled=true;
+ try{
+  const response=await fetch('/api/bot/verify',{cache:'no-store'});const result=await response.json();
+  const checks=[
+   ['Mint na Devnet',result.mintExists],
+   ['Transação confirmada',result.transactionConfirmed],
+   ['JSON completo',result.metadataValid],
+   ['Imagem acessível',result.imageReachable]
+  ];
+  status.textContent=checks.map(([label,ok])=>(ok?'✓ ':'✗ ')+label).join(' · ');
+  if(result.metadata){const details=document.createElement('p');details.textContent='Metadados verificados: '+result.metadata.name+' ('+result.metadata.symbol+') — '+result.metadata.description;status.append(document.createElement('br'),details);}
+  if(!result.ok&&result.error){const err=document.createElement('p');err.textContent=result.error;status.append(document.createElement('br'),err);}
+  if(!response.ok&&!result.error)status.textContent+=' · Verificação incompleta.';
+ }catch(error){status.textContent='Falha na verificação: '+error.message;}
+ finally{button.disabled=false;}
+});
 document.getElementById('botStart').addEventListener('click',()=>botAction('/api/bot/start'));
 document.getElementById('botStop').addEventListener('click',()=>botAction('/api/bot/stop'));
 document.getElementById('simulateRecovery').addEventListener('click',()=>{const value=Number(document.getElementById('simProceeds').value);if(!Number.isFinite(value)||value<0){document.getElementById('botMessage').textContent='Informe um valor válido.';return;}botAction('/api/bot/simulate-recovery',{proceedsBrl:value});});
