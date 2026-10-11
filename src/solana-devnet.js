@@ -322,3 +322,62 @@ export async function createSplTokenOnDevnet({ initialSupply, decimals = 6, name
     confirmed: true
   };
 }
+
+
+// Verifies the token account, confirmed creation transaction, and public metadata URI.
+// This is a read-only check: it never signs or submits a transaction.
+export async function verifyTokenOnDevnet({ mintAddress, signature, metadataUri }) {
+  const endpoint = getDevnetRpcUrl();
+  const mint = new PublicKey(mintAddress);
+  const connection = new Connection(endpoint, { commitment: "confirmed" });
+  const account = await connection.getAccountInfo(mint, "confirmed");
+  const mintExists = Boolean(account && account.owner.equals(TOKEN_PROGRAM_ID) && account.data.length === MINT_SIZE);
+  let transactionConfirmed = false;
+  let transactionError = null;
+  if (signature) {
+    const status = await connection.getSignatureStatuses([signature], { searchTransactionHistory: true });
+    transactionConfirmed = Boolean(status.value[0] && !status.value[0].err &&
+      ["confirmed", "finalized"].includes(status.value[0].confirmationStatus));
+    if (status.value[0]?.err) transactionError = "A transação foi registrada com erro.";
+  }
+  let metadata = null;
+  let metadataError = null;
+  let metadataValid = false;
+  let imageReachable = false;
+  try {
+    const uri = new URL(metadataUri);
+    if (uri.protocol !== "https:" || !["gateway.pinata.cloud", "ipfs.io", "cloudflare-ipfs.com"].includes(uri.hostname)) {
+      throw new Error("URI fora dos gateways IPFS HTTPS permitidos.");
+    }
+    const response = await fetch(uri, { signal: AbortSignal.timeout(8000) });
+    if (!response.ok) throw new Error("JSON de metadados indisponível (HTTP " + response.status + ").");
+    metadata = await response.json();
+    metadataValid = Boolean(
+      typeof metadata.name === "string" && metadata.name.trim() &&
+      typeof metadata.symbol === "string" && metadata.symbol.trim() &&
+      typeof metadata.description === "string" && metadata.description.trim() &&
+      typeof metadata.image === "string" && metadata.image.startsWith("https://")
+    );
+    if (!metadataValid) throw new Error("JSON não contém nome, símbolo, descrição e imagem HTTPS.");
+    const imageUrl = new URL(metadata.image);
+    if (imageUrl.protocol !== "https:" || !["gateway.pinata.cloud", "ipfs.io", "cloudflare-ipfs.com"].includes(imageUrl.hostname)) {
+      throw new Error("URL da imagem fora dos gateways IPFS HTTPS permitidos.");
+    }
+    const imageResponse = await fetch(imageUrl, { method: "HEAD", signal: AbortSignal.timeout(8000) });
+    imageReachable = imageResponse.ok && /^image\//i.test(imageResponse.headers.get("content-type") || "");
+  } catch (error) {
+    metadataError = error.message || "Falha ao validar metadados.";
+  }
+  return {
+    ok: mintExists && transactionConfirmed && metadataValid && imageReachable,
+    cluster: "devnet",
+    readOnly: true,
+    mintAddress: mint.toBase58(),
+    mintExists,
+    transactionConfirmed,
+    metadataValid,
+    imageReachable,
+    metadata: metadata ? { name: metadata.name, symbol: metadata.symbol, description: metadata.description, image: metadata.image } : null,
+    error: metadataError || transactionError
+  };
+}
