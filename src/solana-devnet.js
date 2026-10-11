@@ -363,7 +363,7 @@ export async function verifyTokenOnDevnet({ mintAddress, signature, metadataUri 
     if (imageUrl.protocol !== "https:" || !["gateway.pinata.cloud", "ipfs.io", "cloudflare-ipfs.com"].includes(imageUrl.hostname)) {
       throw new Error("URL da imagem fora dos gateways IPFS HTTPS permitidos.");
     }
-    const imageResponse = await fetch(imageUrl, { method: "HEAD", signal: AbortSignal.timeout(8000) });
+    const imageResponse = await fetch(imageUrl, { signal: AbortSignal.timeout(8000) });
     imageReachable = imageResponse.ok && /^image\//i.test(imageResponse.headers.get("content-type") || "");
   } catch (error) {
     metadataError = error.message || "Falha ao validar metadados.";
