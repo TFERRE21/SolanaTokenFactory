@@ -30,20 +30,9 @@ body{margin:0;padding:32px;max-width:980px;margin-inline:auto}h1{letter-spacing:
 <p>Esta verificação consulta saúde e slot da Devnet. Não cria tokens, não assina e não envia transações.</p>
 </section>
 
-<section class="card" style="margin-top:14px" id="creator">
-<h2>Área administrativa</h2>
-<p>O ADMIN_API_TOKEN e a chave da carteira são lidos exclusivamente pelo servidor no VPS e nunca são solicitados no navegador. Para abrir a área administrativa, entre com a senha ADMIN_PANEL_PASSWORD configurada no iContainer. A sessão dura até 8 horas.</p>
-<form id="loginForm">
-<label for="adminPassword">Senha do painel administrativo</label>
-<input id="adminPassword" type="password" autocomplete="current-password" required placeholder="ADMIN_PANEL_PASSWORD configurada no iContainer" style="display:block;width:100%;box-sizing:border-box;margin:8px 0 14px;padding:12px;border-radius:8px;border:1px solid #405071;background:#0b1020;color:#eef2ff">
-<button id="loginButton" type="submit" style="padding:10px 16px;border:0;border-radius:9px;background:#14f195;color:#052014;font-weight:700;cursor:pointer">Entrar</button>
-<button id="logoutButton" type="button" hidden style="padding:10px 16px;border:1px solid #405071;border-radius:9px;background:#0b1020;color:#eef2ff;cursor:pointer">Sair</button>
-<p id="loginMessage" role="status" aria-live="polite"></p>
-</form>
-</section>
-<section class="card" style="margin-top:14px" id="creatorFormCard" hidden>
+<section class="card" style="margin-top:14px" id="creatorFormCard">
 <h2>Criar token SPL · Devnet</h2>
-<p>Informe os dados do token. A imagem deve estar disponível por uma URL pública HTTPS. O servidor publica o JSON dos metadados no Pinata e grava nome e símbolo on-chain. Cada criação envia uma transação irreversível à Devnet e consome SOL de teste.</p>
+<p>Criação direta na Devnet: as credenciais são lidas pelo servidor no VPS e não são solicitadas nesta página. Informe nome, símbolo, descrição e URL pública HTTPS da imagem. Cada criação envia uma transação irreversível e consome SOL de teste. Por segurança, há limite de 3 criações por hora por IP.</p>
 <form id="tokenForm">
 <label for="tokenName">Nome do token (até 32 caracteres)</label>
 <input id="tokenName" maxlength="32" required placeholder="Ex.: Meu Token" style="display:block;width:100%;box-sizing:border-box;margin:8px 0 14px;padding:12px;border-radius:8px;border:1px solid #405071;background:#0b1020;color:#eef2ff">
@@ -64,52 +53,6 @@ body{margin:0;padding:32px;max-width:980px;margin-inline:auto}h1{letter-spacing:
 </section>
 <section class="card" style="margin-top:14px"><h2>Próximas etapas</h2><p>Testes unitários → verificação Devnet → testes de transação em rede de testes → criação de tokens → páginas gratuitas → monitoramento diário.</p></section>
 <script>
-
-const loginForm = document.getElementById('loginForm');
-const loginMessage = document.getElementById('loginMessage');
-const creatorFormCard = document.getElementById('creatorFormCard');
-const logoutButton = document.getElementById('logoutButton');
-
-async function refreshAdminSession() {
-  try {
-    const response = await fetch('/api/admin/session', { credentials: 'same-origin' });
-    const data = await response.json();
-    creatorFormCard.hidden = !data.authenticated;
-    document.getElementById('adminPassword').disabled = data.authenticated;
-    document.getElementById('loginButton').hidden = data.authenticated;
-    logoutButton.hidden = !data.authenticated;
-    loginMessage.textContent = data.authenticated ? 'Sessão administrativa ativa.' : 'Entre para habilitar a criação.';
-  } catch {
-    loginMessage.textContent = 'Não foi possível verificar a sessão administrativa.';
-  }
-}
-loginForm.addEventListener('submit', async (event) => {
-  event.preventDefault();
-  const button = document.getElementById('loginButton');
-  button.disabled = true;
-  loginMessage.textContent = 'Validando…';
-  try {
-    const response = await fetch('/api/admin/login', {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ adminPassword: document.getElementById('adminPassword').value })
-    });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Falha na autenticação');
-    document.getElementById('adminPassword').value = '';
-    await refreshAdminSession();
-  } catch (error) {
-    loginMessage.textContent = error.message;
-  } finally {
-    button.disabled = false;
-  }
-});
-logoutButton.addEventListener('click', async () => {
-  await fetch('/api/admin/logout', { method: 'POST', credentials: 'same-origin' });
-  await refreshAdminSession();
-});
-refreshAdminSession();
 
 const tokenForm = document.getElementById('tokenForm');
 tokenForm.addEventListener('submit', async (event) => {
