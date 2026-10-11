@@ -32,10 +32,10 @@ body{margin:0;padding:32px;max-width:980px;margin-inline:auto}h1{letter-spacing:
 
 <section class="card" style="margin-top:14px" id="creator">
 <h2>Área administrativa</h2>
-<p>Entre uma vez com o ADMIN_API_TOKEN configurado no iContainer. O servidor valida a variável e mantém uma sessão segura por até 8 horas; o token não fica no código nem é solicitado a cada criação.</p>
+<p>Entre uma vez com o ADMIN_API_TOKEN configurado no iContainer. O servidor valida a senha ADMIN_PANEL_PASSWORD configurada no iContainer e mantém uma sessão segura por até 8 horas. O ADMIN_API_TOKEN continua apenas no servidor.</p>
 <form id="loginForm">
-<label for="adminToken">Token administrativo</label>
-<input id="adminToken" type="password" autocomplete="current-password" required placeholder="ADMIN_API_TOKEN do iContainer" style="display:block;width:100%;box-sizing:border-box;margin:8px 0 14px;padding:12px;border-radius:8px;border:1px solid #405071;background:#0b1020;color:#eef2ff">
+<label for="adminPassword">Senha do painel administrativo</label>
+<input id="adminPassword" type="password" autocomplete="current-password" required placeholder="ADMIN_PANEL_PASSWORD configurada no iContainer" style="display:block;width:100%;box-sizing:border-box;margin:8px 0 14px;padding:12px;border-radius:8px;border:1px solid #405071;background:#0b1020;color:#eef2ff">
 <button id="loginButton" type="submit" style="padding:10px 16px;border:0;border-radius:9px;background:#14f195;color:#052014;font-weight:700;cursor:pointer">Entrar</button>
 <button id="logoutButton" type="button" hidden style="padding:10px 16px;border:1px solid #405071;border-radius:9px;background:#0b1020;color:#eef2ff;cursor:pointer">Sair</button>
 <p id="loginMessage" role="status" aria-live="polite"></p>
@@ -75,7 +75,7 @@ async function refreshAdminSession() {
     const response = await fetch('/api/admin/session', { credentials: 'same-origin' });
     const data = await response.json();
     creatorFormCard.hidden = !data.authenticated;
-    document.getElementById('adminToken').disabled = data.authenticated;
+    document.getElementById('adminPassword').disabled = data.authenticated;
     document.getElementById('loginButton').hidden = data.authenticated;
     logoutButton.hidden = !data.authenticated;
     loginMessage.textContent = data.authenticated ? 'Sessão administrativa ativa.' : 'Entre para habilitar a criação.';
