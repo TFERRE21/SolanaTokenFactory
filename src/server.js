@@ -61,7 +61,7 @@ const server = http.createServer(async (req, res) => {
   if (req.method === "POST" && req.url === "/api/admin/login") {
     try {
       const body = await readJsonBody(req);
-      if (!adminTokenMatches(body.adminToken, config.adminApiToken)) {
+      if (!config.adminPanelPassword || !adminTokenMatches(body.adminPassword, config.adminPanelPassword)) {
         json(res, 401, { error: "Token administrativo inválido" });
         return;
       }
