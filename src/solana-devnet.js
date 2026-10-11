@@ -13,6 +13,69 @@ const DEFAULT_DEVNET_RPC = "https://api.devnet.solana.com";
 const TOKEN_PROGRAM_ID = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
 const MINT_SIZE = 82;
+const METADATA_PROGRAM_ID = new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
+
+function u32le(value) {
+  const b = Buffer.alloc(4);
+  b.writeUInt32LE(value);
+  return b;
+}
+function borshString(value) {
+  const b = Buffer.from(value, "utf8");
+  return Buffer.concat([u32le(b.length), b]);
+}
+async function pinTokenMetadata({ name, symbol, description, imageUrl }) {
+  const jwt = process.env.PINATA_JWT;
+  if (!jwt) throw new Error("Configure PINATA_JWT no iContainer para publicar os metadados do token.");
+  const image = new URL(imageUrl);
+  if (image.protocol !== "https:") throw new Error("A URL da imagem precisa usar HTTPS.");
+  const metadata = {
+    name, symbol, description,
+    image: image.toString(),
+    properties: { files: [{ uri: image.toString(), type: "image" }], category: "image" }
+  };
+  const response = await fetch("https://api.pinata.cloud/pinning/pinJSONToIPFS", {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${jwt}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ pinataContent: metadata, pinataMetadata: { name: `${symbol}-metadata.json` } })
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || !result.IpfsHash) {
+    throw new Error("Falha ao publicar metadados no Pinata. Confira PINATA_JWT.");
+  }
+  return `https://gateway.pinata.cloud/ipfs/${result.IpfsHash}`;
+}
+function buildCreateMetadataInstruction({ mint, authority, payer, uri, name, symbol }) {
+  const [metadata] = PublicKey.findProgramAddressSync(
+    [Buffer.from("metadata"), METADATA_PROGRAM_ID.toBuffer(), mint.toBuffer()],
+    METADATA_PROGRAM_ID
+  );
+  const data = Buffer.concat([
+    Buffer.from([33]), // CreateMetadataAccountV3
+    borshString(name),
+    borshString(symbol),
+    borshString(uri),
+    Buffer.from([0, 0]), // seller fee basis points = 0
+    Buffer.from([0]), // creators: None
+    Buffer.from([0]), // collection: None
+    Buffer.from([0]), // uses: None
+    Buffer.from([1]), // isMutable = true
+    Buffer.from([0]) // collectionDetails: None
+  ]);
+  return new TransactionInstruction({
+    programId: METADATA_PROGRAM_ID,
+    keys: [
+      { pubkey: metadata, isSigner: false, isWritable: true },
+      { pubkey: mint, isSigner: false, isWritable: false },
+      { pubkey: authority, isSigner: true, isWritable: false },
+      { pubkey: payer, isSigner: true, isWritable: true },
+      { pubkey: authority, isSigner: false, isWritable: false },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      { pubkey: SYSVAR_RENT_PUBKEY, isSigner: false, isWritable: false }
+    ],
+    data
+  });
+}
 
 export function getDevnetRpcUrl() {
   const raw = process.env.SOLANA_RPC_URL || DEFAULT_DEVNET_RPC;
@@ -175,12 +238,21 @@ export function buildMintToInstruction(mint, destination, authority, amount) {
  * SPL instruction layouts are defined here to avoid the vulnerable
  * bigint-buffer dependency pulled in by @solana/spl-token.
  */
-export async function createSplTokenOnDevnet({ initialSupply, decimals = 6 }) {
+export async function createSplTokenOnDevnet({ initialSupply, decimals = 6, name, symbol, description, imageUrl }) {
   const endpoint = getDevnetRpcUrl();
   if (!Number.isInteger(decimals) || decimals < 0 || decimals > 9) {
     throw new RangeError("decimals must be an integer from 0 to 9");
   }
   const amount = parseTokenAmount(initialSupply, decimals);
+  for (const [label, value, max] of [["name", name, 32], ["symbol", symbol, 10], ["description", description, 500]]) {
+    if (typeof value !== "string" || !value.trim() || value.trim().length > max) {
+      throw new TypeError(`${label} is required and must be at most ${max} characters`);
+    }
+  }
+  if (typeof imageUrl !== "string" || !imageUrl.trim()) throw new TypeError("imageUrl is required (public HTTPS image URL)");
+  const metadataUri = await pinTokenMetadata({
+    name: name.trim(), symbol: symbol.trim(), description: description.trim(), imageUrl: imageUrl.trim()
+  });
   const payer = loadDevnetWallet();
   const connection = new Connection(endpoint, { commitment: "confirmed" });
   const mint = Keypair.generate();
