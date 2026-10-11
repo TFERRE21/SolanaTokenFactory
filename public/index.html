@@ -29,8 +29,83 @@ body{margin:0;padding:32px;max-width:980px;margin-inline:auto}h1{letter-spacing:
 <p id="devnet">Verificando conexão somente leitura…</p>
 <p>Esta verificação consulta saúde e slot da Devnet. Não cria tokens, não assina e não envia transações.</p>
 </section>
+
+<section class="card" style="margin-top:14px" id="creator">
+<h2>Criar token SPL · Devnet</h2>
+<p>Crie tokens de teste pelo painel, sem comandos no terminal. A operação envia uma transação à Solana Devnet e consome SOL de teste. Nunca use a chave privada da carteira neste formulário.</p>
+<form id="tokenForm">
+<label for="adminToken">Token administrativo (ADMIN_API_TOKEN)</label>
+<input id="adminToken" type="password" autocomplete="current-password" required placeholder="Cole o token administrativo" style="display:block;width:100%;box-sizing:border-box;margin:8px 0 14px;padding:12px;border-radius:8px;border:1px solid #405071;background:#0b1020;color:#eef2ff">
+<div class="grid">
+<div><label for="tokenSupply">Oferta inicial</label><input id="tokenSupply" value="1000" inputmode="decimal" required style="display:block;width:100%;box-sizing:border-box;margin:8px 0 14px;padding:12px;border-radius:8px;border:1px solid #405071;background:#0b1020;color:#eef2ff"></div>
+<div><label for="tokenDecimals">Casas decimais</label><select id="tokenDecimals" style="display:block;width:100%;box-sizing:border-box;margin:8px 0 14px;padding:12px;border-radius:8px;border:1px solid #405071;background:#0b1020;color:#eef2ff"><option value="6" selected>6</option><option value="0">0</option><option value="2">2</option><option value="9">9</option></select></div>
+</div>
+<button id="createTokenButton" type="submit" style="padding:12px 18px;border:0;border-radius:9px;background:#14f195;color:#052014;font-weight:700;cursor:pointer">Criar token na Devnet</button>
+<p id="tokenMessage" role="status" aria-live="polite"></p>
+<div id="tokenResult" hidden></div>
+</form>
+<p style="font-size:.9rem">O token administrativo fica apenas na memória desta página e é enviado no cabeçalho da requisição. Não o compartilhe nem o salve em código público. Criações confirmadas não podem ser desfeitas.</p>
+</section>
+
 <section class="card" style="margin-top:14px"><h2>Próximas etapas</h2><p>Testes unitários → verificação Devnet → testes de transação em rede de testes → criação de tokens → páginas gratuitas → monitoramento diário.</p></section>
 <script>
+
+const tokenForm = document.getElementById('tokenForm');
+tokenForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const button = document.getElementById('createTokenButton');
+  const message = document.getElementById('tokenMessage');
+  const result = document.getElementById('tokenResult');
+  const adminToken = document.getElementById('adminToken').value.trim();
+  const initialSupply = document.getElementById('tokenSupply').value.trim();
+  const decimals = Number(document.getElementById('tokenDecimals').value);
+  result.hidden = true;
+  result.textContent = '';
+  if (!adminToken || !initialSupply || !/^(0|[1-9]\\d*)(\\.\\d+)?$/.test(initialSupply) || Number(initialSupply) <= 0) {
+    message.textContent = 'Informe o token administrativo e uma oferta positiva válida.';
+    return;
+  }
+  if (!confirm('Confirma criar este token na SOLANA DEVNET? A transação usará SOL de teste e não poderá ser desfeita.')) return;
+  button.disabled = true;
+  button.textContent = 'Enviando transação…';
+  message.textContent = 'Solicitando criação. Não feche esta página nem repita a solicitação.';
+  try {
+    const response = await fetch('/api/devnet/tokens', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken },
+      body: JSON.stringify({ initialSupply, decimals })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Falha ao criar token.');
+    message.textContent = data.confirmed ? 'Token criado e confirmado na Devnet.' : 'Solicitação concluída; verifique a confirmação.';
+    const explorer = document.createElement('a');
+    explorer.href = data.explorerUrl;
+    explorer.target = '_blank';
+    explorer.rel = 'noopener noreferrer';
+    explorer.textContent = 'Abrir transação no Solana Explorer';
+    const mintLabel = document.createElement('p');
+    mintLabel.textContent = 'Endereço do token (Mint): ' + data.mintAddress;
+    const copy = document.createElement('button');
+    copy.type = 'button';
+    copy.textContent = 'Copiar endereço do token';
+    copy.style.cssText = 'padding:10px;border-radius:8px;border:1px solid #405071;background:#0b1020;color:#eef2ff;cursor:pointer';
+    copy.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(data.mintAddress); copy.textContent = 'Endereço copiado'; }
+      catch { mintLabel.textContent = 'Endereço do token (copie manualmente): ' + data.mintAddress; }
+    });
+    const signature = document.createElement('p');
+    signature.textContent = 'Assinatura: ' + data.signature;
+    result.append(mintLabel, copy, explorer, signature);
+    result.hidden = false;
+    document.getElementById('adminToken').value = '';
+  } catch (error) {
+    message.textContent = 'Erro: ' + error.message;
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Criar token na Devnet';
+  }
+});
+
 fetch('/api/status').then(r=>r.json()).then(s=>{
  document.getElementById('mode').textContent=s.mode.toUpperCase();
  const p=s.sellPlanExample;
