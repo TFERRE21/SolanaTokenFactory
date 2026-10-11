@@ -14,9 +14,16 @@ export const config = Object.freeze({
   initialCapitalBrl: numberFromEnv("INITIAL_CAPITAL_BRL", 100),
   maxSlippageBps: numberFromEnv("MAX_SLIPPAGE_BPS", 100),
   autoLaunchEnabled: process.env.AUTO_LAUNCH_ENABLED === "true",
-  autoSellEnabled: process.env.AUTO_SELL_ENABLED === "true"
+  autoSellEnabled: process.env.AUTO_SELL_ENABLED === "true",
+  tokenCreationEnabled: process.env.TOKEN_CREATION_ENABLED === "true",
+  adminApiToken: process.env.ADMIN_API_TOKEN ?? ""
 });
 
 if (!["simulation", "devnet"].includes(config.tradingMode)) {
   throw new Error("This scaffold only supports simulation or devnet mode.");
+}
+
+// Never permit token creation unless explicitly enabled for Devnet.
+if (config.tokenCreationEnabled && config.solanaCluster !== "devnet") {
+  throw new Error("Token creation is restricted to SOLANA_CLUSTER=devnet.");
 }
