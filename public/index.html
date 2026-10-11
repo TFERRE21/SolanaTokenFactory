@@ -61,7 +61,7 @@ tokenForm.addEventListener('submit', async (event) => {
   const decimals = Number(document.getElementById('tokenDecimals').value);
   result.hidden = true;
   result.textContent = '';
-  if (!adminToken || !initialSupply || !/^(0|[1-9]\\d*)(\\.\\d+)?$/.test(initialSupply) || Number(initialSupply) <= 0) {
+  if (!adminToken || !initialSupply || !/^(0|[1-9]\d*)(\\.\d+)?$/.test(initialSupply) || Number(initialSupply) <= 0) {
     message.textContent = 'Informe o token administrativo e uma oferta positiva válida.';
     return;
   }
