@@ -154,14 +154,16 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     try {
-      const body = await readJsonBody(req);
+      const body = await readJsonBody(req, 4 * 1024 * 1024);
       const result = await createSplTokenOnDevnet({
         initialSupply: body.initialSupply,
         decimals: body.decimals === undefined ? 6 : body.decimals,
         name: body.name,
         symbol: body.symbol,
         description: body.description,
-        imageUrl: body.imageUrl
+        imageUrl: body.imageUrl,
+        imageDataUrl: body.imageDataUrl,
+        imageFileName: body.imageFileName
       });
       json(res, 201, result);
     } catch (error) {
