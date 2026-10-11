@@ -24,7 +24,12 @@ body{margin:0;padding:32px;max-width:980px;margin-inline:auto}h1{letter-spacing:
 <p id="plan">Carregando status do motor de simulação…</p>
 <p>Uma venda só será contabilizada após confirmação on-chain. Cotação, liquidez, taxas e slippage podem alterar o resultado.</p>
 </section>
-<section class="card" style="margin-top:14px"><h2>Próximas etapas</h2><p>Testes unitários → Solana devnet → validação de confirmação e idempotência → criação de tokens → páginas gratuitas → monitoramento diário.</p></section>
+<section class="card" style="margin-top:14px">
+<h2>Conexão com Solana Devnet</h2>
+<p id="devnet">Verificando conexão somente leitura…</p>
+<p>Esta verificação consulta saúde e slot da Devnet. Não cria tokens, não assina e não envia transações.</p>
+</section>
+<section class="card" style="margin-top:14px"><h2>Próximas etapas</h2><p>Testes unitários → verificação Devnet → testes de transação em rede de testes → criação de tokens → páginas gratuitas → monitoramento diário.</p></section>
 <script>
 fetch('/api/status').then(r=>r.json()).then(s=>{
  document.getElementById('mode').textContent=s.mode.toUpperCase();
@@ -33,5 +38,10 @@ fetch('/api/status').then(r=>r.json()).then(s=>{
  ? 'Plano calculado: vender aproximadamente '+(p.sellFraction*100).toFixed(2)+'% da posição e reter '+(p.retainedFraction*100).toFixed(2)+'%. Estimativa apenas; sem transação.'
  : 'Venda bloqueada ou meta não estimável: '+p.status;
 }).catch(()=>document.getElementById('plan').textContent='Não foi possível carregar o status.');
+fetch('/api/devnet/health').then(async r=>({ok:r.ok,data:await r.json()})).then(({ok,data})=>{
+ document.getElementById('devnet').textContent=ok && data.ok
+ ? 'Conectado · slot confirmado: '+data.slot+' · somente leitura.'
+ : 'Devnet indisponível no momento: '+(data.error || 'resposta inesperada')+'.';
+}).catch(()=>document.getElementById('devnet').textContent='Não foi possível consultar a Devnet.');
 </script>
 </body></html>
