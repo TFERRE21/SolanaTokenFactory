@@ -43,6 +43,7 @@ const server = http.createServer(async (req, res) => {
   res.end(JSON.stringify({ error: "Not found" }));
 });
 
-server.listen(config.port, "127.0.0.1", () => {
-  console.log(`SolanaTokenFactory simulation dashboard at http://127.0.0.1:${config.port}`);
+// Bind to all container interfaces so the platform's reverse proxy can reach Node.
+server.listen(config.port, "0.0.0.0", () => {
+  console.log(`SolanaTokenFactory dashboard listening on 0.0.0.0:${config.port} (mode=${config.tradingMode})`);
 });
