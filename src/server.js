@@ -15,6 +15,19 @@ const json = (res, status, payload) => {
 
 const adminSessions = new Map();
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
+const createLimits = new Map();
+const CREATE_LIMIT = 3;
+const CREATE_WINDOW_MS = 60 * 60 * 1000;
+function canCreateFromRequest(req) {
+  const forwarded = req.headers["x-forwarded-for"];
+  const ip = (typeof forwarded === "string" ? forwarded.split(",")[0].trim() : "") || req.socket.remoteAddress || "unknown";
+  const now = Date.now();
+  const recent = (createLimits.get(ip) || []).filter(t => now - t < CREATE_WINDOW_MS);
+  if (recent.length >= CREATE_LIMIT) return false;
+  recent.push(now);
+  createLimits.set(ip, recent);
+  return true;
+}
 
 function readCookie(req, name) {
   const cookie = req.headers.cookie || "";
@@ -130,15 +143,25 @@ const server = http.createServer(async (req, res) => {
       json(res, 403, { error: "Token creation is disabled. Explicitly enable Devnet mode and TOKEN_CREATION_ENABLED." });
       return;
     }
-    if (!validAdminSession(req)) {
-      json(res, 401, { error: "Unauthorized" });
+    // ADMIN_API_TOKEN remains exclusively server-side; never expose it to the browser.
+    // Creation remains Devnet-only and is rate-limited because the public form has no login.
+    if (!config.adminApiToken) {
+      json(res, 503, { error: "ADMIN_API_TOKEN is not configured on the server" });
+      return;
+    }
+    if (!canCreateFromRequest(req)) {
+      json(res, 429, { error: "Limite atingido: máximo de 3 criações por hora por IP." });
       return;
     }
     try {
       const body = await readJsonBody(req);
       const result = await createSplTokenOnDevnet({
         initialSupply: body.initialSupply,
-        decimals: body.decimals === undefined ? 6 : body.decimals
+        decimals: body.decimals === undefined ? 6 : body.decimals,
+        name: body.name,
+        symbol: body.symbol,
+        description: body.description,
+        imageUrl: body.imageUrl
       });
       json(res, 201, result);
     } catch (error) {
