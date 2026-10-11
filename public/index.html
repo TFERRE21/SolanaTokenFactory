@@ -69,7 +69,7 @@ tokenForm.addEventListener('submit', async (event) => {
   const decimals = Number(document.getElementById('tokenDecimals').value);
   result.hidden = true;
   result.textContent = '';
-  if (!name || !symbol || !description || !imageFile || imageFile.size > 2 * 1024 * 1024 || !initialSupply || !/^(0|[1-9]\\d*)(\\.\\d+)?$/.test(initialSupply) || Number(initialSupply) <= 0) {
+  if (!name || !symbol || !description || !imageFile || imageFile.size > 2 * 1024 * 1024 || !initialSupply || !/^(0|[1-9]\d*)(\.\d+)?$/.test(initialSupply) || Number(initialSupply) <= 0) {
     message.textContent = 'Preencha os dados, selecione uma imagem de até 2 MB e informe uma oferta inicial válida.';
     return;
   }
