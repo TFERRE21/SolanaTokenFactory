@@ -32,7 +32,7 @@ body{margin:0;padding:32px;max-width:980px;margin-inline:auto}h1{letter-spacing:
 
 <section class="card" style="margin-top:14px" id="creator">
 <h2>Área administrativa</h2>
-<p>Entre uma vez com o ADMIN_API_TOKEN configurado no iContainer. O servidor valida a senha ADMIN_PANEL_PASSWORD configurada no iContainer e mantém uma sessão segura por até 8 horas. O ADMIN_API_TOKEN continua apenas no servidor.</p>
+<p>O ADMIN_API_TOKEN e a chave da carteira são lidos exclusivamente pelo servidor no VPS e nunca são solicitados no navegador. Para abrir a área administrativa, entre com a senha ADMIN_PANEL_PASSWORD configurada no iContainer. A sessão dura até 8 horas.</p>
 <form id="loginForm">
 <label for="adminPassword">Senha do painel administrativo</label>
 <input id="adminPassword" type="password" autocomplete="current-password" required placeholder="ADMIN_PANEL_PASSWORD configurada no iContainer" style="display:block;width:100%;box-sizing:border-box;margin:8px 0 14px;padding:12px;border-radius:8px;border:1px solid #405071;background:#0b1020;color:#eef2ff">
