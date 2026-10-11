@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { config } from "./config.js";
 import { calculateSellPlan } from "./sell-engine.js";
+import { checkSolanaDevnet } from "./solana-devnet.js";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const server = http.createServer(async (req, res) => {
@@ -26,6 +27,17 @@ const server = http.createServer(async (req, res) => {
         maxSlippageBps: config.maxSlippageBps
       })
     }));
+    return;
+  }
+  if (req.url === "/api/devnet/health") {
+    if (config.solanaCluster !== "devnet") {
+      res.writeHead(409, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ ok: false, error: "Devnet health check is disabled because SOLANA_CLUSTER is not devnet" }));
+      return;
+    }
+    const result = await checkSolanaDevnet();
+    res.writeHead(result.ok ? 200 : 503, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
+    res.end(JSON.stringify(result));
     return;
   }
   if (req.url === "/" || req.url === "/index.html") {
