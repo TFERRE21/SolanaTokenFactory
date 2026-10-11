@@ -1,6 +1,24 @@
+import {
+  Connection,
+  Keypair,
+  PublicKey,
+  SystemProgram,
+  Transaction,
+  sendAndConfirmTransaction
+} from "@solana/web3.js";
+import {
+  ASSOCIATED_TOKEN_PROGRAM_ID,
+  MINT_SIZE,
+  TOKEN_PROGRAM_ID,
+  createAssociatedTokenAccountInstruction,
+  createInitializeMintInstruction,
+  createMintToInstruction,
+  getAssociatedTokenAddressSync
+} from "@solana/spl-token";
+
 const DEFAULT_DEVNET_RPC = "https://api.devnet.solana.com";
 
-function getDevnetRpcUrl() {
+export function getDevnetRpcUrl() {
   const raw = process.env.SOLANA_RPC_URL || DEFAULT_DEVNET_RPC;
   let url;
   try {
@@ -58,4 +76,108 @@ export async function checkSolanaDevnet({ fetchImpl = fetch, timeoutMs = 8000 } 
   } finally {
     clearTimeout(timeout);
   }
+}
+
+function loadDevnetWallet() {
+  const raw = process.env.SOLANA_DEVNET_SECRET_KEY;
+  if (!raw) throw new Error("SOLANA_DEVNET_SECRET_KEY is not configured");
+  let bytes;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed) || parsed.some(n => !Number.isInteger(n) || n < 0 || n > 255)) {
+      throw new Error("expected a JSON array of byte values");
+    }
+    bytes = Uint8Array.from(parsed);
+  } catch {
+    throw new Error("SOLANA_DEVNET_SECRET_KEY must be a JSON byte array; never put it in source control");
+  }
+  try {
+    return Keypair.fromSecretKey(bytes);
+  } catch {
+    throw new Error("SOLANA_DEVNET_SECRET_KEY is not a valid Solana keypair");
+  }
+}
+
+function parseTokenAmount(value, decimals) {
+  if (typeof value !== "string" || !/^(0|[1-9]\d*)(\.\d+)?$/.test(value)) {
+    throw new TypeError("initialSupply must be a positive decimal string, such as \"1000\"");
+  }
+  const [whole, fraction = ""] = value.split(".");
+  if (fraction.length > decimals) {
+    throw new RangeError(`initialSupply has more than ${decimals} decimal places`);
+  }
+  const units = BigInt(whole) * (10n ** BigInt(decimals)) +
+    BigInt((fraction + "0".repeat(decimals)).slice(0, decimals) || "0");
+  if (units <= 0n || units > 0xffffffffffffffffn) {
+    throw new RangeError("initialSupply is outside the supported token amount range");
+  }
+  return units;
+}
+
+/**
+ * Creates an SPL mint and mints its initial supply to the configured Devnet wallet.
+ * Explicitly restricted to Devnet. This submits a real transaction on Devnet, never Mainnet.
+ */
+export async function createSplTokenOnDevnet({ initialSupply, decimals = 6 }) {
+  const endpoint = getDevnetRpcUrl();
+  if (!Number.isInteger(decimals) || decimals < 0 || decimals > 9) {
+    throw new RangeError("decimals must be an integer from 0 to 9");
+  }
+  const amount = parseTokenAmount(initialSupply, decimals);
+  const payer = loadDevnetWallet();
+  const connection = new Connection(endpoint, { commitment: "confirmed" });
+  const mint = Keypair.generate();
+  const associatedTokenAccount = getAssociatedTokenAddressSync(
+    mint.publicKey,
+    payer.publicKey,
+    false,
+    TOKEN_PROGRAM_ID,
+    ASSOCIATED_TOKEN_PROGRAM_ID
+  );
+  const lamports = await connection.getMinimumBalanceForRentExemption(MINT_SIZE);
+  const transaction = new Transaction().add(
+    SystemProgram.createAccount({
+      fromPubkey: payer.publicKey,
+      newAccountPubkey: mint.publicKey,
+      space: MINT_SIZE,
+      lamports,
+      programId: TOKEN_PROGRAM_ID
+    }),
+    createInitializeMintInstruction(mint.publicKey, decimals, payer.publicKey, null, TOKEN_PROGRAM_ID),
+    createAssociatedTokenAccountInstruction(
+      payer.publicKey,
+      associatedTokenAccount,
+      payer.publicKey,
+      mint.publicKey,
+      TOKEN_PROGRAM_ID,
+      ASSOCIATED_TOKEN_PROGRAM_ID
+    ),
+    createMintToInstruction(
+      mint.publicKey,
+      associatedTokenAccount,
+      payer.publicKey,
+      amount,
+      [],
+      TOKEN_PROGRAM_ID
+    )
+  );
+
+  const signature = await sendAndConfirmTransaction(connection, transaction, [payer, mint], {
+    commitment: "confirmed",
+    preflightCommitment: "confirmed"
+  });
+  const confirmed = await connection.getSignatureStatuses([signature], { searchTransactionHistory: true });
+  if (confirmed.value[0]?.err) throw new Error("Devnet transaction failed confirmation");
+
+  return {
+    cluster: "devnet",
+    mintAddress: mint.publicKey.toBase58(),
+    tokenAccount: associatedTokenAccount.toBase58(),
+    ownerAddress: payer.publicKey.toBase58(),
+    decimals,
+    initialSupply: initialSupply,
+    signature,
+    explorerUrl: `https://explorer.solana.com/tx/${signature}?cluster=devnet`,
+    confirmed: true
+  };
 }
