@@ -3,6 +3,7 @@ import {
   Keypair,
   PublicKey,
   SystemProgram,
+  SYSVAR_RENT_PUBKEY,
   Transaction,
   TransactionInstruction,
   sendAndConfirmTransaction
@@ -118,14 +119,19 @@ export function buildInitializeMintInstruction(mint, decimals, authority) {
   if (!Number.isInteger(decimals) || decimals < 0 || decimals > 9) {
     throw new RangeError("decimals must be an integer from 0 to 9");
   }
-  const data = Buffer.alloc(35);
+  // InitializeMint layout: instruction (1), decimals (1), mint authority (32),
+  // freeze-authority option tag (1), and freeze authority (32) = 67 bytes.
+  const data = Buffer.alloc(67);
   data[0] = 0; // InitializeMint
   data[1] = decimals;
   authority.toBuffer().copy(data, 2);
-  data[34] = 0; // no freeze authority
+  data[34] = 0; // COption<Pubkey>: no freeze authority; remaining bytes stay zero.
   return new TransactionInstruction({
     programId: TOKEN_PROGRAM_ID,
-    keys: [{ pubkey: mint, isSigner: false, isWritable: true }],
+    keys: [
+      { pubkey: mint, isSigner: false, isWritable: true },
+      { pubkey: SYSVAR_RENT_PUBKEY, isSigner: false, isWritable: false }
+    ],
     data
   });
 }
