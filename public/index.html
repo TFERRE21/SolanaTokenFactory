@@ -53,6 +53,13 @@ body{margin:0;padding:32px;max-width:980px;margin-inline:auto}h1{letter-spacing:
 <label for="simProceeds">Valor recebido (R$)</label><input id="simProceeds" type="number" min="0" step="0.01" value="195" style="display:block;width:100%;box-sizing:border-box;margin:8px 0 12px;padding:12px;border-radius:8px;border:1px solid #405071;background:#0b1020;color:#eef2ff">
 <button id="simulateRecovery" type="button" style="padding:10px 14px;border:1px solid #405071;border-radius:9px;background:#0b1020;color:#eef2ff;cursor:pointer">Registrar simulação</button><p id="botMessage" role="status" aria-live="polite"></p>
 </div>
+<h3>Todos os tokens criados</h3>
+<p>Catálogo de tokens gerados pela IA, com endereços e links de metadados.</p>
+<h3>Monitoramento de mercado</h3>
+<p>Preço, liquidez e volume só existem quando há um mercado real indexado. Tokens Devnet aparecem como “sem cotação de mercado”.</p>
+<button id="refreshPrices" type="button" style="padding:10px 14px;border:1px solid #405071;border-radius:9px;background:#0b1020;color:#eef2ff;cursor:pointer">ATUALIZAR PREÇOS</button>
+<div id="priceStatus" role="status" aria-live="polite" style="margin:10px 0"></div>
+<div id="priceList"></div>
 <h3>Histórico de tokens e ciclos</h3><div id="botTokens">Carregando…</div>
 <h3>Eventos recentes</h3><div id="botEvents"></div>
 </section>
@@ -94,7 +101,7 @@ async function refreshBot(){
   const img=document.createElement('img');img.alt='Arte de '+bot.activeToken.name;img.width=88;img.height=88;img.style.cssText='border-radius:12px;object-fit:cover;background:#0b1020';img.src=bot.activeToken.imageUri||('data:image/svg+xml;base64,'+btoa(unescape(encodeURIComponent(bot.activeToken.imageSvg||''))));
   const details=document.createElement('div');const title=document.createElement('strong');title.textContent=bot.activeToken.name+' ('+bot.activeToken.symbol+')';
   const desc=document.createElement('p');desc.textContent=bot.activeToken.description;
-  const value=document.createElement('p');value.textContent='Status: '+(bot.activeToken.confirmed?'CONFIRMADO NA DEVNET':'PENDENTE')+' · Rede: '+(bot.activeToken.network||'simulação')+' · Oferta: '+(bot.activeToken.initialSupply||'—')+' · Decimais: '+(bot.activeToken.decimals??'—');
+  const value=document.createElement('p');value.textContent='Gerado por: '+(bot.activeToken.generatedBy==='openai'?'OpenAI':'modelo alternativo')+' · Status: '+(bot.activeToken.confirmed?'CONFIRMADO NA DEVNET':'PENDENTE')+' · Rede: '+(bot.activeToken.network||'simulação')+' · Oferta: '+(bot.activeToken.initialSupply||'—')+' · Decimais: '+(bot.activeToken.decimals??'—');
   details.append(title,desc,value);
   if(bot.activeToken.mintAddress){const mint=document.createElement('p');mint.textContent='Mint: '+bot.activeToken.mintAddress;details.append(mint);}
   if(bot.activeToken.metadataUri){const metadata=document.createElement('p');const link=document.createElement('a');link.href=bot.activeToken.metadataUri;link.target='_blank';link.rel='noopener noreferrer';link.textContent='Abrir metadados JSON (nome, símbolo, descrição e imagem)';metadata.append(link);details.append(metadata);const imageLink=document.createElement('p');const imageAnchor=document.createElement('a');imageAnchor.href=bot.activeToken.imageUri||'#';imageAnchor.target='_blank';imageAnchor.rel='noopener noreferrer';imageAnchor.textContent='Abrir imagem publicada no IPFS';imageLink.append(imageAnchor);details.append(imageLink);}
@@ -112,6 +119,25 @@ async function refreshBot(){
  const events=document.getElementById('botEvents');events.textContent='';for(const event of [...bot.events].reverse()){const p=document.createElement('p');p.textContent=new Date(event.at).toLocaleString('pt-BR')+' — '+event.message;events.append(p);}
 }
 async function botAction(route,body){const msg=document.getElementById('botMessage');msg.textContent='Processando…';try{const response=await fetch(route,{method:'POST',headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});const data=await response.json();if(!response.ok)throw new Error(data.error||'Falha');msg.textContent='Atualizado.';await refreshBot();}catch(error){msg.textContent='Erro: '+error.message;}}
+document.getElementById('refreshPrices').addEventListener('click',async()=>{
+ const status=document.getElementById('priceStatus');const list=document.getElementById('priceList');
+ status.textContent='Consultando dados de mercado…';list.textContent='';
+ try{
+  const response=await fetch('/api/bot/prices',{cache:'no-store'});const data=await response.json();
+  if(!response.ok)throw new Error(data.error||'Falha ao consultar mercado.');
+  status.textContent='Consulta: '+new Date(data.checkedAt).toLocaleString('pt-BR');
+  for(const token of data.prices||[]){
+   const card=document.createElement('div');card.style.cssText='padding:10px;margin:8px 0;border:1px solid #283653;border-radius:10px';
+   const title=document.createElement('strong');title.textContent=(token.name||'Token')+' ('+(token.symbol||'—')+')';
+   const line=document.createElement('p');
+   if(token.status==='market_data'){
+    line.textContent='Preço: US$ '+token.priceUsd+' · Liquidez: US$ '+token.liquidityUsd.toLocaleString('en-US')+' · Volume 24h: US$ '+token.volume24hUsd.toLocaleString('en-US')+' · Variação 24h: '+token.change24hPct+'%';
+    if(token.pairUrl){const a=document.createElement('a');a.href=token.pairUrl;a.target='_blank';a.rel='noopener noreferrer';a.textContent='Abrir mercado';card.append(title,document.createElement('br'),line,a);list.append(card);continue;}
+   }else line.textContent=token.message||'Sem dados de preço disponíveis.';
+   card.append(title,document.createElement('br'),line);list.append(card);
+  }
+ }catch(error){status.textContent='Erro: '+error.message;}
+});
 document.getElementById('verifyToken').addEventListener('click',async()=>{
  const status=document.getElementById('verifyTokenStatus');status.textContent='Verificando blockchain, transação, JSON e imagem IPFS...';
  const button=document.getElementById('verifyToken');button.disabled=true;
