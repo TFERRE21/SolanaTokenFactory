@@ -189,15 +189,10 @@ export async function simulateRecovery(proceedsBrl) {
   if (state.activeToken.simulatedProceedsBrl >= state.targetRecoveryBrl) {
     state.activeToken.status = "target_reached_simulated";
     state.activeToken.closedAt = new Date().toISOString();
-    state.events.push({ at: new Date().toISOString(), type: "target", message: "Meta de recuperação simulada atingida; encerrando ciclo e criando o próximo." });
+    state.events.push({ at: new Date().toISOString(), type: "target_simulated", message: "Meta simulada atingida. Nenhum próximo token foi criado: a confirmação de venda e recebimento real ainda não está integrada." });
+    // Simulation must never trigger another on-chain token creation.
     state.activeToken = null;
-    const nextCycle = state.cycle + 1;
-    const nextToken = generatedToken(nextCycle);
-    await createTokenOnDevnet(nextToken);
-    state.cycle = nextCycle;
-    state.activeToken = nextToken;
-    state.tokens.unshift(nextToken);
-    state.events.push({ at: new Date().toISOString(), type: "created_on_devnet", message: "Novo token criado e confirmado na Devnet: " + nextToken.name + " · " + nextToken.mintAddress });
+    state.running = false;
   }
   await saveState(state);
   return publicState(state);
