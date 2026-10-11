@@ -1,0 +1,14 @@
+{
+  "name": "solana-token-factory",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Simulation-first automated Solana token ecosystem",
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "dev": "node src/server.js",
+    "start": "NODE_ENV=production node src/server.js",
+    "test": "node --test",
+    "check": "node --check src/server.js && node --check src/sell-engine.js && node --check src/config.js"
+  }
+}
