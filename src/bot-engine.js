@@ -69,79 +69,12 @@ async function saveState(state) {
   await writeFile(tmp, JSON.stringify(state, null, 2), { mode: 0o600 });
   await rename(tmp, STATE_FILE);
 }
-function fallbackConcept(cycle, existingTokens) {
+function generatedToken(cycle) {
   const concept = BRAND_CONCEPTS[(cycle - 1) % BRAND_CONCEPTS.length];
-  let name = concept.name;
-  let symbol = concept.symbol;
-  const existingNames = new Set(existingTokens.map(t => String(t.name || "").toLowerCase()));
-  const existingSymbols = new Set(existingTokens.map(t => String(t.symbol || "").toUpperCase()));
-  if (existingNames.has(name.toLowerCase()) || existingSymbols.has(symbol)) {
-    const suffix = randomUUID().replace(/-/g, "").slice(0, 4).toUpperCase();
-    name = concept.name + " " + suffix;
-    symbol = (concept.symbol.slice(0, 5) + suffix.slice(0, 4)).slice(0, 10);
-  }
-  return { name, symbol, tagline: concept.tagline, description: concept.description, palette: concept.palette };
-}
-async function generateConcept(cycle, existingTokens) {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) return { ...fallbackConcept(cycle, existingTokens), generatedBy: "fallback" };
-  const prior = existingTokens.slice(0, 80).map(t => ({ name: t.name, symbol: t.symbol }));
-  const response = await fetch("https://api.openai.com/v1/responses", {
-    method: "POST",
-    headers: { "Authorization": "Bearer " + apiKey, "Content-Type": "application/json" },
-    signal: AbortSignal.timeout(25000),
-    body: JSON.stringify({
-      model: process.env.OPENAI_MODEL || "gpt-4.1-mini",
-      input: [
-        { role: "system", content: "Você cria conceitos originais e profissionais de projetos de tokens Web3 para ambiente de teste. Responda apenas JSON válido, sem markdown. Não alegue parceria, utilidade existente, auditoria, lucro, listagem ou liquidez. Não imite marcas conhecidas. Evite os nomes e símbolos existentes fornecidos." },
-        { role: "user", content: JSON.stringify({
-          task: "Crie uma identidade nova, distinta e séria para um token de teste Solana.",
-          cycle,
-          existingTokens: prior,
-          schema: { name: "string até 32 caracteres", symbol: "string alfanumérica maiúscula até 10 caracteres", tagline: "frase curta em português", description: "descrição profissional em português, com aviso de conceito experimental e sem promessa de lucro", palette: ["#RRGGBB", "#RRGGBB", "#RRGGBB"] }
-        }) }
-      ],
-      text: { format: { type: "json_object" } },
-      max_output_tokens: 700
-    })
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const apiError = payload.error || {};
-    const type = String(apiError.type || apiError.code || "unknown");
-    const safeMessage = String(apiError.message || "A API não informou detalhes.").replace(/sk-[A-Za-z0-9_-]{8,}/g, "[CHAVE OCULTA]").slice(0, 500);
-    if (response.status === 429 && (type.includes("quota") || String(apiError.code || "").includes("quota"))) {
-      throw new Error("OpenAI sem cota/crédito disponível (HTTP 429). Confira Usage, Billing e limites do projeto na plataforma OpenAI. Detalhe: " + safeMessage);
-    }
-    if (response.status === 429) {
-      throw new Error("Limite de requisições da OpenAI atingido (HTTP 429). Aguarde e tente novamente. Tipo: " + type + ". Detalhe: " + safeMessage);
-    }
-    if (response.status === 401 || response.status === 403) {
-      throw new Error("A OpenAI recusou a autenticação/permissão (HTTP " + response.status + "). Confira a chave e o projeto da API no VPS. Tipo: " + type + ". Detalhe: " + safeMessage);
-    }
-    throw new Error("Falha na OpenAI (HTTP " + response.status + "). Tipo: " + type + ". Detalhe: " + safeMessage);
-  }
-  const output = (payload.output || []).flatMap(item => item.content || []).find(item => item.type === "output_text")?.text || payload.output_text;
-  if (!output) throw new Error("OpenAI retornou uma resposta vazia para o conceito.");
-  let data;
-  try { data = JSON.parse(output); } catch { throw new Error("OpenAI retornou JSON inválido para o conceito."); }
-  const name = String(data.name || "").trim();
-  const symbol = String(data.symbol || "").trim().toUpperCase();
-  const tagline = String(data.tagline || "").trim();
-  const description = String(data.description || "").trim();
-  const palette = Array.isArray(data.palette) ? data.palette.slice(0, 3) : [];
-  if (!name || name.length > 32 || !/^[A-Z0-9]{2,10}$/.test(symbol) || !tagline || tagline.length > 120 || !description || description.length > 500 || palette.length !== 3 || !palette.every(color => /^#[0-9a-fA-F]{6}$/.test(color))) {
-    throw new Error("O conceito gerado pela OpenAI não passou na validação.");
-  }
-  const names = new Set(existingTokens.map(t => String(t.name || "").toLowerCase()));
-  const symbols = new Set(existingTokens.map(t => String(t.symbol || "").toUpperCase()));
-  if (names.has(name.toLowerCase()) || symbols.has(symbol)) throw new Error("A OpenAI gerou nome ou símbolo repetido. Clique novamente para tentar um novo conceito.");
-  return { name, symbol, tagline, description, palette, generatedBy: "openai" };
-}
-async function generatedToken(cycle, existingTokens = []) {
-  const concept = await generateConcept(cycle, existingTokens);
-  const { name, symbol, tagline, description } = concept;
+  const name = concept.name;
+  const symbol = concept.symbol;
   const [accent, deep, pale] = concept.palette;
+  const initials = name.split(/\\s+/).map(part => part[0]).join("").slice(0, 2);
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#080d1b"/><stop offset="1" stop-color="${deep}"/></linearGradient>
@@ -161,11 +94,12 @@ async function generatedToken(cycle, existingTokens = []) {
   <text x="512" y="858" font-family="Arial,sans-serif" font-size="24" letter-spacing="5" text-anchor="middle" fill="${pale}" fill-opacity=".85">DIGITAL ASSET CONCEPT</text>
 </svg>`;
   return {
-    id: randomUUID(), cycle, name, symbol, tagline, description,
-    generatedBy: concept.generatedBy,
+    id: randomUUID(), cycle, name, symbol,
+    tagline: concept.tagline,
+    description: concept.description,
     imageSvg: svg,
     imageDataUrl: "data:image/svg+xml;base64," + Buffer.from(svg).toString("base64"),
-    status: "generated",
+    status: "simulated",
     initialCapitalBrl: START_CAPITAL_BRL,
     simulatedValueBrl: START_CAPITAL_BRL,
     simulatedProceedsBrl: 0,
@@ -229,7 +163,7 @@ export async function startBot() {
   }
   if (!state.activeToken) {
     const nextCycle = state.cycle + 1;
-    const token = await generatedToken(nextCycle, state.tokens);
+    const token = generatedToken(nextCycle);
     // Only mark the cycle active after metadata and token are confirmed on Devnet.
     await createTokenOnDevnet(token);
     state.cycle = nextCycle;
