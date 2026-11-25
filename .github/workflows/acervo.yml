@@ -1,0 +1,20 @@
+name: Acervo nacional Quadrix
+on:
+  schedule:
+    - cron: '15 10 * * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency: acervo-quadrix
+jobs:
+  catalogar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/acervo.py
+      - run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add acervo.json
+          git diff --cached --quiet || (git commit -m "Atualiza catálogo Quadrix" && git pull --rebase && git push)
