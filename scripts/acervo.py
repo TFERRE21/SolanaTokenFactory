@@ -19,7 +19,7 @@ def get(url):
 def official(u):
  host=urllib.parse.urlparse(u).hostname or ''
  return host=='quadrix.org.br' or host.endswith('.quadrix.org.br')
-queue=list(data['seeds']); seen=set(); records={x['url']:x for x in data['documents']}; failures=[]
+queue=list(dict.fromkeys(data.get('pending',[])+data['seeds'])); seen=set(); records={x['url']:x for x in data['documents']}; failures=[]
 while queue and len(seen)<100:
  u=queue.pop(0)
  if u in seen or not official(u): continue
@@ -30,11 +30,11 @@ while queue and len(seen)<100:
   if not official(v): continue
   low=t.lower()
   if re.search(r'\.pdf(?:\?|$)',v,re.I) or ('gabarito definitivo' in low or 'caderno de prova' in low):
-   if 'gabarito' in low or 'prova' in low:
+   if 'gabarito' in low or 'prova' in low or 'caderno' in low:
     records[v]={'url':v,'title':t,'source':u,'kind':'gabarito' if 'gabarito' in low else 'prova','status':'pendente de pareamento e validação'}
-  elif re.search(r'/articles/|/collections/|/informacoes/',v) and re.search(r'prova|arquivo|concurso|20[12][0-9]|^[A-Z]{2,}',t,re.I) and v not in seen and v not in queue: queue.append(v)
+  elif re.search(r'/articles/|/collections/|/informacoes/|/concursos/',v) and v not in seen and v not in queue: queue.append(v)
  time.sleep(0.7)
-data.update(documents=list(records.values()),lastRun=time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()),pagesChecked=len(seen),failures=failures)
+data.update(pending=list(dict.fromkeys(queue+[x['url'] for x in failures])),documents=list(records.values()),lastRun=time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()),pagesChecked=len(seen),failures=failures)
 P.write_text(json.dumps(data,ensure_ascii=False,indent=2))
 print('Documentos catalogados:',len(records),'Falhas:',len(failures))
-if len(failures)==len(seen): raise SystemExit('Nenhuma fonte acessível')
+if len(failures)==len(seen): print('ALERTA: nenhuma fonte acessível; fila preservada para nova tentativa')
