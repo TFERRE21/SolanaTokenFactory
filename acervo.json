@@ -1,1 +1,47 @@
-{"seeds":["https://ajuda.quadrix.org.br/pt-BR/collections/5827253-arquivo-provas-aplicadas","https://ajuda.quadrix.org.br/pt-BR/articles/8278846-2-000-provas-anteriores","https://quadrix.org.br/informacoes/2095/","https://quadrix.org.br/informacoes/2098/","https://quadrix.org.br/informacoes/2108/","https://quadrix.org.br/informacoes/2097/"],"documents":[],"lastRun":null,"pagesChecked":0,"failures":[]}
+{
+  "seeds": [
+    "https://ajuda.quadrix.org.br/pt-BR/collections/5827253-arquivo-provas-aplicadas",
+    "https://ajuda.quadrix.org.br/pt-BR/articles/8278846-2-000-provas-anteriores",
+    "https://quadrix.org.br/informacoes/2095/",
+    "https://quadrix.org.br/informacoes/2098/",
+    "https://quadrix.org.br/informacoes/2108/",
+    "https://quadrix.org.br/informacoes/2097/"
+  ],
+  "documents": [],
+  "lastRun": "2026-11-26T19:38:22Z",
+  "pagesChecked": 6,
+  "failures": [
+    {
+      "url": "https://ajuda.quadrix.org.br/pt-BR/collections/5827253-arquivo-provas-aplicadas",
+      "error": "HTTP Error 403: Forbidden"
+    },
+    {
+      "url": "https://ajuda.quadrix.org.br/pt-BR/articles/8278846-2-000-provas-anteriores",
+      "error": "HTTP Error 403: Forbidden"
+    },
+    {
+      "url": "https://quadrix.org.br/informacoes/2095/",
+      "error": "HTTP Error 403: Forbidden"
+    },
+    {
+      "url": "https://quadrix.org.br/informacoes/2098/",
+      "error": "HTTP Error 403: Forbidden"
+    },
+    {
+      "url": "https://quadrix.org.br/informacoes/2108/",
+      "error": "HTTP Error 403: Forbidden"
+    },
+    {
+      "url": "https://quadrix.org.br/informacoes/2097/",
+      "error": "HTTP Error 403: Forbidden"
+    }
+  ],
+  "pending": [
+    "https://ajuda.quadrix.org.br/pt-BR/collections/5827253-arquivo-provas-aplicadas",
+    "https://ajuda.quadrix.org.br/pt-BR/articles/8278846-2-000-provas-anteriores",
+    "https://quadrix.org.br/informacoes/2095/",
+    "https://quadrix.org.br/informacoes/2098/",
+    "https://quadrix.org.br/informacoes/2108/",
+    "https://quadrix.org.br/informacoes/2097/"
+  ]
+}
